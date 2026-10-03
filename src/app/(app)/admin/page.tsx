@@ -20,6 +20,12 @@ export default async function Admin() {
         <form action={logout} className="shrink-0"><button className="text-[13px] text-muted">Выйти</button></form>
       </header>
 
+      <Link href="/admin/emoji" className="card flex items-center justify-between gap-3 p-5 hover:bg-raised">
+        <span className="min-w-0"><span className="block font-semibold">Смайлики клуба</span>
+          <span className="text-[13px] text-muted">Набор для реакций в ленте: загрузить, переименовать, порядок, скрыть</span></span>
+        <span aria-hidden="true" className="text-muted">→</span>
+      </Link>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] lg:items-start lg:gap-6 [&>*]:min-w-0">
       <div className="lg:sticky lg:top-10"><CreateUserForm /></div>
 

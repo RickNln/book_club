@@ -5,3 +5,7 @@ node_modules
 *.tsbuildinfo
 next-env.d.ts
 v2-fixed
+.vercel
+.env*
+# смайлики для разовой загрузки (scripts/seed-emoji.ts) — лица участников, в репозиторий не кладём
+emoji-seed/

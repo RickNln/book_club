@@ -90,8 +90,37 @@ export const comments = pgTable("comments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => ({ byEntry: index("comments_entry_idx").on(t.entryId, t.createdAt) }));
 
+/** Смайлики клуба: набор группы, загружает админ. Картинка — data URL 128×128 до 60 КБ. */
+export const customEmoji = pgTable("custom_emoji", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").references(() => groups.id).notNull(),
+  /** короткий код латиницей, уникален в группе: rick-shock */
+  code: text("code").notNull(),
+  label: text("label").notNull(),
+  image: text("image").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  /** скрытый пропадает из выбора, но старые реакции им видны */
+  isHidden: boolean("is_hidden").default(false).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({ byGroup: index("custom_emoji_group_order_idx").on(t.groupId, t.sortOrder) }));
+
+/**
+ * Реакция смайликом на мысль (entryId) или комментарий (commentId) — ровно одно из двух.
+ * Одним смайликом на запись — один раз (частичные уникальные индексы в 0004_reactions.sql).
+ */
+export const reactions = pgTable("reactions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  emojiId: integer("emoji_id").references(() => customEmoji.id).notNull(),
+  entryId: integer("entry_id").references(() => entries.id, { onDelete: "cascade" }),
+  commentId: integer("comment_id").references(() => comments.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Habit = typeof habits.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type Entry = typeof entries.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
+export type CustomEmoji = typeof customEmoji.$inferSelect;

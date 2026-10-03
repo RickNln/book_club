@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   addComment, deleteComment, deleteNote, loadFeed, markFeedSeen, refreshComments, saveNote, updateComment,
 } from "@/app/actions";
@@ -8,12 +8,14 @@ import type { FeedComment, FeedItem, FeedPage, FinishedItem, NoteItem } from "@/
 import { Avatar } from "./Avatar";
 import { Cover } from "./BookProgress";
 import { Stars } from "./Stars";
+import { ReactionBar, ReactionsProvider, useLongPress, useOpenReactionPicker } from "./Reactions";
+import type { EmojiInfo, ReactionSummary } from "@/lib/reactions";
 
 const NOTE_MAX = 1000;
 const POLL_MS = 15_000;
 
 /** Лента: мысли и «дочитал(а)», подгрузка по 20, комментарии обновляются без перезагрузки. */
-export function FeedList({ initial }: { initial: FeedPage }) {
+export function FeedList({ initial, catalog, recent }: { initial: FeedPage; catalog: EmojiInfo[]; recent: number[] }) {
   const [items, setItems] = useState(initial.items);
   const [next, setNext] = useState(initial.next);
   const [loading, startLoading] = useTransition();
@@ -41,6 +43,11 @@ export function FeedList({ initial }: { initial: FeedPage }) {
     setItems((list) => (patch
       ? list.map((i) => (i.key === key ? ({ ...i, ...patch } as FeedItem) : i))
       : list.filter((i) => i.key !== key)));
+  // реакции на комментарий — точечно, чтобы не затереть соседние изменения
+  const reactComment = (key: string, commentId: number, reactions: ReactionSummary[]) =>
+    setItems((list) => list.map((i) => (i.key === key
+      ? ({ ...i, comments: i.comments.map((c) => (c.id === commentId ? { ...c, reactions } : c)) } as FeedItem)
+      : i)));
 
   if (!items.length) {
     return (
@@ -55,13 +62,14 @@ export function FeedList({ initial }: { initial: FeedPage }) {
   }
 
   return (
+    <ReactionsProvider catalog={catalog} recent={recent}>
     <div className="space-y-4">
       <ul className="space-y-4">
         {items.map((it) => (
           <li key={it.key}>
             {it.kind === "note"
-              ? <NoteCard item={it} onChange={(p) => update(it.key, p)} />
-              : <FinishedCard item={it} onChange={(p) => update(it.key, p)} />}
+              ? <NoteCard item={it} onChange={(p) => update(it.key, p)} onCommentReact={(id, r) => reactComment(it.key, id, r)} />
+              : <FinishedCard item={it} onChange={(p) => update(it.key, p)} onCommentReact={(id, r) => reactComment(it.key, id, r)} />}
           </li>
         ))}
       </ul>
@@ -76,8 +84,11 @@ export function FeedList({ initial }: { initial: FeedPage }) {
         </button>
       )}
     </div>
+    </ReactionsProvider>
   );
 }
+
+type CommentReact = (commentId: number, reactions: ReactionSummary[]) => void;
 
 function CardHeader({ item, sub, right }: { item: FeedItem; sub: string; right?: React.ReactNode }) {
   return (
@@ -92,8 +103,14 @@ function CardHeader({ item, sub, right }: { item: FeedItem; sub: string; right?:
   );
 }
 
-function NoteCard({ item, onChange }: { item: NoteItem; onChange: (patch: Partial<NoteItem> | null) => void }) {
+function NoteCard({ item, onChange, onCommentReact }: {
+  item: NoteItem; onChange: (patch: Partial<NoteItem> | null) => void; onCommentReact: CommentReact;
+}) {
   const [revealed, setRevealed] = useState(false);
+  const setReactions = useCallback((reactions: ReactionSummary[]) => onChange({ reactions }), [onChange]);
+  // телефон: долгое нажатие на мысль открывает выбор смайлика
+  const openPicker = useOpenReactionPicker(item.key, item.reactions, setReactions);
+  const longPress = useLongPress(() => openPicker(null));
   const [editing, setEditing] = useState(false);
   const [busy, startBusy] = useTransition();
   const [err, setErr] = useState("");
@@ -125,9 +142,10 @@ function NoteCard({ item, onChange }: { item: NoteItem; onChange: (patch: Partia
             Спойлер{item.book ? <> к «{item.book.title}»</> : null} — <span className="underline underline-offset-2">показать</span>
           </button>
         ) : (
-          <p className="whitespace-pre-wrap text-[15px] leading-relaxed [overflow-wrap:anywhere]">{item.note}</p>
+          <p {...longPress.handlers} className="whitespace-pre-wrap text-[15px] leading-relaxed [overflow-wrap:anywhere]">{item.note}</p>
         )}
       </div>
+      {!editing && <ReactionBar target={item.key} reactions={item.reactions} onChange={setReactions} />}
 
       {!editing && (item.mine || item.canDelete) && (
         <div className="mt-2 flex flex-wrap gap-x-4 text-[13px]">
@@ -145,13 +163,15 @@ function NoteCard({ item, onChange }: { item: NoteItem; onChange: (patch: Partia
       )}
       {err && <p role="alert" className="mt-2 text-[13px] text-lamp">{err}</p>}
 
-      <Comments target={item.key} comments={item.comments} onChange={(comments) => onChange({ comments })} />
+      <Comments target={item.key} comments={item.comments} onChange={(comments) => onChange({ comments })} onReact={onCommentReact} />
     </article>
   );
 }
 
 /** «{имя} дочитал(а) «{книга}» — ★★★★☆» с отзывом; комментируется как мысль. */
-function FinishedCard({ item, onChange }: { item: FinishedItem; onChange: (patch: Partial<FinishedItem> | null) => void }) {
+function FinishedCard({ item, onChange, onCommentReact }: {
+  item: FinishedItem; onChange: (patch: Partial<FinishedItem> | null) => void; onCommentReact: CommentReact;
+}) {
   return (
     <article className="card min-w-0 p-4 sm:p-5 lg:p-6">
       <CardHeader item={item} sub={`дочитал${item.mine ? "и" : "(а)"} книгу · ${item.at}`} />
@@ -170,12 +190,14 @@ function FinishedCard({ item, onChange }: { item: FinishedItem; onChange: (patch
           )}
         </div>
       </div>
-      <Comments target={item.key} comments={item.comments} onChange={(comments) => onChange({ comments })} />
+      <Comments target={item.key} comments={item.comments} onChange={(comments) => onChange({ comments })} onReact={onCommentReact} />
     </article>
   );
 }
 
-function Comments({ target, comments, onChange }: { target: string; comments: FeedComment[]; onChange: (c: FeedComment[]) => void }) {
+function Comments({ target, comments, onChange, onReact }: {
+  target: string; comments: FeedComment[]; onChange: (c: FeedComment[]) => void; onReact: CommentReact;
+}) {
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, start] = useTransition();
@@ -189,7 +211,7 @@ function Comments({ target, comments, onChange }: { target: string; comments: Fe
     <section className="mt-4 border-t border-line pt-3" aria-label="Комментарии">
       {comments.length > 0 && (
         <ul className="mb-3 space-y-3">
-          {comments.map((c) => <CommentRow key={c.id} c={c} busy={busy}
+          {comments.map((c) => <CommentRow key={c.id} c={c} busy={busy} onReact={onReact}
             onSave={(t, done) => run(updateComment(c.id, t), done)}
             onDelete={() => confirm("Удалить комментарий?") && run(deleteComment(c.id))} />)}
         </ul>
@@ -211,11 +233,12 @@ function Comments({ target, comments, onChange }: { target: string; comments: Fe
   );
 }
 
-function CommentRow({ c, busy, onSave, onDelete }: {
-  c: FeedComment; busy: boolean; onSave: (text: string, done: () => void) => void; onDelete: () => void;
+function CommentRow({ c, busy, onSave, onDelete, onReact }: {
+  c: FeedComment; busy: boolean; onSave: (text: string, done: () => void) => void; onDelete: () => void; onReact: CommentReact;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(c.text);
+  const setReactions = useCallback((r: ReactionSummary[]) => onReact(c.id, r), [onReact, c.id]);
   return (
     <li className="flex gap-2.5">
       <Avatar name={c.name} url={c.avatarUrl} size={28} />
@@ -236,6 +259,7 @@ function CommentRow({ c, busy, onSave, onDelete }: {
         ) : (
           <p className="whitespace-pre-wrap text-[14px] leading-snug [overflow-wrap:anywhere]">{c.text}</p>
         )}
+        {!editing && <ReactionBar target={`c${c.id}`} reactions={c.reactions} onChange={setReactions} compact />}
         {!editing && (c.mine || c.canDelete) && (
           <div className="mt-1 flex gap-3 text-[12px] text-muted">
             {c.mine && <button type="button" className="hover:text-ink" onClick={() => setEditing(true)}>Изменить</button>}

@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import type { User } from "@/db/schema";
 import { shortDate, timeLabel } from "./dates";
 import { readingHabit } from "./data";
+import { reactionsFor, unreadReactions, type ReactionSummary } from "./reactions";
 
 export const FEED_PAGE = 20;
 export const NOTE_MAX = 1000;
@@ -20,13 +21,16 @@ export type FeedComment = {
   id: number; name: string; avatarUrl: string | null; text: string; at: string; edited: boolean;
   /** своё — можно править и удалять; canDelete — ещё и админ */
   mine: boolean; canDelete: boolean;
+  reactions: ReactionSummary[];
 };
 type FeedBase = {
   key: TargetKey; name: string; avatarUrl: string | null; at: string; edited: boolean;
   book: { title: string; coverUrl: string | null } | null;
   mine: boolean; canDelete: boolean; comments: FeedComment[];
 };
-export type NoteItem = FeedBase & { kind: "note"; id: number; day: string; pages: number; note: string; isSpoiler: boolean };
+export type NoteItem = FeedBase & {
+  kind: "note"; id: number; day: string; pages: number; note: string; isSpoiler: boolean; reactions: ReactionSummary[];
+};
 export type FinishedItem = FeedBase & { kind: "finished"; id: number; rating: number | null; review: string | null };
 export type FeedItem = NoteItem | FinishedItem;
 export type FeedPage = { items: FeedItem[]; next: string | null };
@@ -60,9 +64,11 @@ export async function commentsFor(me: User, keys: string[]): Promise<Record<stri
     out[key]?.push({
       id: c.id, name, avatarUrl, text: c.text, at: timeLabel(c.createdAt),
       edited: wasEdited(c.createdAt, c.updatedAt),
-      mine: c.userId === me.id, canDelete: c.userId === me.id || isAdmin(me),
+      mine: c.userId === me.id, canDelete: c.userId === me.id || isAdmin(me), reactions: [],
     });
   }
+  const r = await reactionsFor(me, [], rows.map(({ c }) => c.id));
+  for (const list of Object.values(out)) for (const c of list) c.reactions = r.comments[c.id] ?? [];
   return out;
 }
 
@@ -120,7 +126,7 @@ export async function feedPage(me: User, cursor?: string | null): Promise<FeedPa
           kind: "note", key: `e${e.id}`, id: e.id, name, avatarUrl, day: shortDate(e.day), at: timeLabel(t),
           edited: wasEdited(e.noteCreatedAt, e.noteUpdatedAt),
           book: title ? { title, coverUrl } : null,
-          pages: Number(e.values?.pages ?? 0), note: e.note!, isSpoiler: e.isSpoiler,
+          pages: Number(e.values?.pages ?? 0), note: e.note!, isSpoiler: e.isSpoiler, reactions: [],
           mine: e.userId === me.id, canDelete: e.userId === me.id || isAdmin(me),
         }),
       };
@@ -140,9 +146,15 @@ export async function feedPage(me: User, cursor?: string | null): Promise<FeedPa
 
   const page = rows.slice(0, FEED_PAGE);
   const comments = await commentsFor(me, page.map((r) => r.key));
+  const noteIds = page.flatMap((r) => (r.key.startsWith("e") ? [Number(r.key.slice(1))] : []));
+  const reacts = (await reactionsFor(me, noteIds, [])).entries;
   const last = page[page.length - 1];
   return {
-    items: page.map((r) => ({ ...r.build(), comments: comments[r.key] ?? [] }) as FeedItem),
+    items: page.map((r) => {
+      const item = { ...r.build(), comments: comments[r.key] ?? [] } as FeedItem;
+      if (item.kind === "note") item.reactions = reacts[item.id] ?? [];
+      return item;
+    }),
     next: rows.length > FEED_PAGE && last ? `${last.t.toISOString()}_${last.key}` : null,
   };
 }
@@ -170,7 +182,7 @@ export async function unreadCount(me: User): Promise<number> {
       eq(schema.users.groupId, me.groupId), ne(schema.comments.userId, me.id),
       seen ? gt(schema.comments.createdAt, seen) : undefined,
     ));
-  return Number(notes?.n ?? 0) + Number(books?.n ?? 0) + Number(comms?.n ?? 0);
+  return Number(notes?.n ?? 0) + Number(books?.n ?? 0) + Number(comms?.n ?? 0) + (await unreadReactions(me));
 }
 
 /** Отметка из группы пользователя — для прав на мысль, сессию и комментарии. */

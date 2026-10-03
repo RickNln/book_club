@@ -11,6 +11,8 @@ import { readingHabit } from "@/lib/data";
 import { cleanCover, editableBook } from "@/lib/books";
 import { NOTE_MAX, commentsFor, feedPage, groupEntry, groupFinishedItem, parseTarget, type FeedComment, type FeedPage } from "@/lib/feed";
 import type { Entry } from "@/db/schema";
+import { emojiOfGroup, groupEmoji, insertEmoji, LABEL_MAX } from "@/lib/emojiStore";
+import { parseReactionTarget, reactableTarget, reactionsFor, type ReactionSummary } from "@/lib/reactions";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -282,6 +284,7 @@ export async function saveNote(_: FormState, f: FormData): Promise<FormState> {
 
 /** Мысль удаляется вместе с комментариями; отметка вечера и серия остаются. */
 async function clearNote(entryId: number) {
+  await db().delete(schema.reactions).where(eq(schema.reactions.entryId, entryId));
   await db().delete(schema.comments).where(eq(schema.comments.entryId, entryId));
   await db().update(schema.entries)
     .set({ note: null, isSpoiler: false, noteCreatedAt: null, noteUpdatedAt: null })
@@ -399,4 +402,88 @@ export async function markFeedSeen() {
   const me = await requireUser();
   await db().update(schema.users).set({ lastFeedSeenAt: new Date() }).where(eq(schema.users.id, me.id));
   revalidatePath("/", "layout");
+}
+
+// ---------- Реакции ----------
+/**
+ * Поставить или снять свою реакцию смайликом на мысль («e12») или комментарий («c5»).
+ * Скрытым смайликом новую реакцию не поставить, а свою старую — снять можно.
+ */
+export async function toggleReaction(target: string, emojiId: number): Promise<{ error?: string; reactions?: ReactionSummary[] }> {
+  const me = await requireUser();
+  const to = parseReactionTarget(target);
+  if (!to || !(await reactableTarget(me, to))) return { error: "Запись уже удалили" };
+  const emoji = await emojiOfGroup(me.groupId, Number(emojiId));
+  if (!emoji) return { error: "Такого смайлика нет в наборе клуба" };
+  const where = and(
+    eq(schema.reactions.userId, me.id), eq(schema.reactions.emojiId, emoji.id),
+    "entryId" in to ? eq(schema.reactions.entryId, to.entryId) : eq(schema.reactions.commentId, to.commentId),
+  );
+  const [existing] = await db().select({ id: schema.reactions.id }).from(schema.reactions).where(where);
+  if (existing) {
+    await db().delete(schema.reactions).where(eq(schema.reactions.id, existing.id));
+  } else {
+    if (emoji.isHidden) return { error: "Этот смайлик скрыт" };
+    try {
+      await db().insert(schema.reactions).values({ ...to, userId: me.id, emojiId: emoji.id, createdAt: new Date() });
+    } catch { /* двойной тап: реакция уже стоит — уникальный индекс, отдадим текущее состояние */ }
+  }
+  const r = await reactionsFor(me, "entryId" in to ? [to.entryId] : [], "commentId" in to ? [to.commentId] : []);
+  return { reactions: "entryId" in to ? r.entries[to.entryId] : r.comments[to.commentId] };
+}
+
+// ---------- Смайлики клуба (админ) ----------
+type EmojiResult = { error?: string; ok?: string };
+
+export async function addEmoji(_: EmojiResult, f: FormData): Promise<EmojiResult> {
+  const me = await requireAdmin();
+  const r = await insertEmoji(me.groupId, me.id, {
+    code: str(f, "code").toLowerCase(), label: str(f, "label"), image: str(f, "image"),
+  });
+  if (!r.ok) return { error: r.error };
+  revalidatePath("/admin/emoji");
+  return { ok: "Смайлик добавлен" };
+}
+
+export async function renameEmoji(id: number, label: string): Promise<EmojiResult> {
+  const me = await requireAdmin();
+  const l = String(label ?? "").trim();
+  if (!l || l.length > LABEL_MAX) return { error: `Подпись — от 1 до ${LABEL_MAX} символов` };
+  if (!(await emojiOfGroup(me.groupId, id))) return { error: "Смайлик не найден" };
+  await db().update(schema.customEmoji).set({ label: l }).where(eq(schema.customEmoji.id, id));
+  revalidatePath("/admin/emoji");
+  return { ok: "Переименовано" };
+}
+
+export async function setEmojiHidden(id: number, hidden: boolean): Promise<EmojiResult> {
+  const me = await requireAdmin();
+  if (!(await emojiOfGroup(me.groupId, id))) return { error: "Смайлик не найден" };
+  await db().update(schema.customEmoji).set({ isHidden: !!hidden }).where(eq(schema.customEmoji.id, id));
+  revalidatePath("/admin/emoji");
+  return { ok: hidden ? "Скрыт из выбора" : "Снова в выборе" };
+}
+
+/** Новый порядок набора — список id сверху вниз (стрелки и перетаскивание). */
+export async function reorderEmoji(ids: number[]): Promise<EmojiResult> {
+  const me = await requireAdmin();
+  const all = await groupEmoji(me.groupId);
+  const order = ids.map(Number);
+  if (order.length !== all.length || !all.every((e) => order.includes(e.id))) return { error: "Набор изменился — обновите страницу" };
+  for (const [i, id] of order.entries()) {
+    const e = all.find((x) => x.id === id)!;
+    if (e.sortOrder !== i + 1) await db().update(schema.customEmoji).set({ sortOrder: i + 1 }).where(eq(schema.customEmoji.id, id));
+  }
+  revalidatePath("/admin/emoji");
+  return {};
+}
+
+/** Удалить можно, только если смайликом ещё не реагировали — иначе только скрыть. */
+export async function deleteEmoji(id: number): Promise<EmojiResult> {
+  const me = await requireAdmin();
+  if (!(await emojiOfGroup(me.groupId, id))) return { error: "Смайлик не найден" };
+  const [used] = await db().select({ id: schema.reactions.id }).from(schema.reactions).where(eq(schema.reactions.emojiId, id)).limit(1);
+  if (used) return { error: "Этим смайликом уже реагировали — его можно только скрыть" };
+  await db().delete(schema.customEmoji).where(eq(schema.customEmoji.id, id));
+  revalidatePath("/admin/emoji");
+  return { ok: "Удалён" };
 }
