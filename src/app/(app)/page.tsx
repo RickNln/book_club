@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { groupDashboard } from "@/lib/data";
+import { factContext, groupDashboard } from "@/lib/data";
 import { shortDate } from "@/lib/dates";
 import { Wave } from "@/components/Wave";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -8,6 +8,7 @@ import { MonthGrid } from "@/components/MonthGrid";
 import { BookProgress } from "@/components/BookProgress";
 import { Flame } from "@/components/Flame";
 import { Avatar } from "@/components/Avatar";
+import { FactCard } from "@/components/FactCard";
 
 const plural = (n: number, one: string, few: string, many: string) => {
   const a = n % 10, b = n % 100;
@@ -19,6 +20,7 @@ export default async function Dashboard() {
   const d = await groupDashboard(me);
   const mine = d.stats.find((s) => s.user.id === me.id);
   const doneToday = mine?.states.get(d.today) === "norm" || mine?.states.get(d.today) === "minimum";
+  const fc = factContext(d, me);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5 [&>*]:min-w-0">
@@ -51,7 +53,9 @@ export default async function Dashboard() {
         <div className="mt-4"><Wave data={d.series} /></div>
       </section>
 
-      <div className="grid grid-cols-3 gap-3 max-[399px]:gap-2 lg:col-span-4 lg:grid-cols-1 lg:gap-5 [&>*]:min-w-0">
+      <FactCard ctx={fc.ctx} missedYesterday={fc.missedYesterday} today={d.today} className="lg:col-span-8" />
+
+      <div className="grid grid-cols-3 gap-3 max-[399px]:gap-2 lg:col-span-4 lg:col-start-9 lg:row-span-2 lg:row-start-2 lg:grid-cols-1 lg:gap-5 [&>*]:min-w-0">
         <div className="card px-3 py-4 max-[399px]:px-2.5 max-[399px]:py-3 lg:flex lg:flex-col lg:justify-center lg:p-6">
           <div className="label truncate max-[399px]:text-[12px]">Эта неделя</div>
           <div className="num mt-1 whitespace-nowrap text-[clamp(18px,5vw,24px)] font-bold lg:text-4xl">{d.thisWeek}%</div>

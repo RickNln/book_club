@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/auth";
-import { readingHabit } from "@/lib/data";
+import { factContext, groupDashboard, readingHabit } from "@/lib/data";
 import { canBackfillYesterday, today } from "@/lib/dates";
 import { AddBookForm, LogForm } from "@/components/forms";
 import { finishBook, undoEntry } from "@/app/actions";
@@ -18,6 +18,7 @@ export default async function Today() {
     .where(and(eq(schema.entries.userId, me.id), eq(schema.entries.habitId, habit.id)))
     .orderBy(desc(schema.entries.createdAt));
   const todays = myEntries.filter((e) => e.day === t);
+  const fc = factContext(await groupDashboard(me), me);
   const read = (id: number) => myEntries.filter((e) => e.itemId === id).reduce((a, e) => a + Number(e.values?.pages ?? 0), 0);
 
   return (
@@ -54,7 +55,8 @@ export default async function Today() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-6 [&>*]:min-w-0">
-          <LogForm books={books.map((b) => ({ id: b.id, title: b.title }))} canYesterday={canBackfillYesterday()} />
+          <LogForm books={books.map((b) => ({ id: b.id, title: b.title }))} canYesterday={canBackfillYesterday()}
+            fact={{ ctx: fc.ctx, missedYesterday: fc.missedYesterday, today: t }} />
           <div className="space-y-4">
           <section className="card space-y-4 p-5">
             <h2 className="font-semibold">Читаю сейчас</h2>

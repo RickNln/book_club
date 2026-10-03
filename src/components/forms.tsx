@@ -4,6 +4,8 @@ import { useFormState, useFormStatus } from "react-dom";
 import type { FormState } from "@/app/actions";
 import { addBook, changeOwnPassword, createUser, deleteBook, login, logReading, resetPassword, updateAvatar, updateBook } from "@/app/actions";
 import { Avatar } from "./Avatar";
+import { FactCard } from "./FactCard";
+import type { PersonalContext } from "@/content/facts";
 
 function Submit({ children, className = "btn-primary w-full" }: { children: React.ReactNode; className?: string }) {
   const { pending } = useFormStatus();
@@ -28,12 +30,16 @@ export function LoginForm() {
 }
 
 type Book = { id: number; title: string };
-export function LogForm({ books, canYesterday }: { books: Book[]; canYesterday: boolean }) {
+type FactProps = { ctx: PersonalContext; missedYesterday: boolean; today: string };
+export function LogForm({ books, canYesterday, fact }: { books: Book[]; canYesterday: boolean; fact: FactProps }) {
   const [s, act] = useFormState(logReading, {});
   const ref = useRef<HTMLFormElement>(null);
-  useEffect(() => { if (s.ok) ref.current?.reset(); }, [s]);
+  // каждая успешная отметка — новый факт в награду
+  const [rewards, setRewards] = useState(0);
+  useEffect(() => { if (s.ok) { ref.current?.reset(); setRewards((n) => n + 1); } }, [s]);
   if (!books.length) return null;
   return (
+    <div className="space-y-4">
     <form ref={ref} action={act} className="card space-y-4 p-5">
       <label className="block">
         <span className="label">Книга</span>
@@ -60,6 +66,8 @@ export function LogForm({ books, canYesterday }: { books: Book[]; canYesterday: 
       <Msg s={s} />
       <Submit>Прочитал</Submit>
     </form>
+    {rewards > 0 && <FactCard key={rewards} {...fact} />}
+    </div>
   );
 }
 

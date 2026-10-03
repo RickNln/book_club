@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, gte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { User } from "@/db/schema";
+import type { PersonalContext } from "@/content/facts";
 import { addDays, today } from "./dates";
 import { memberStats, groupPagesSeries } from "./stats";
 
@@ -37,4 +38,18 @@ export async function groupDashboard(me: User) {
     totalBooks: books.filter((b) => b.status === "finished").length,
     monthStart: addDays(t, -(Number(t.slice(8)) - 1)),
   };
+}
+
+/** Цифры для персональных фактов и признак «вчера был пропуск». */
+export function factContext(d: Awaited<ReturnType<typeof groupDashboard>>, me: User) {
+  const mine = d.stats.find((s) => s.user.id === me.id);
+  const states = mine ? [...mine.states.values()] : [];
+  const ctx: PersonalContext = {
+    pages: mine?.pagesTotal ?? 0,
+    days: states.filter((s) => s === "norm" || s === "minimum").length,
+    groupPages: d.totalPages,
+    streak: mine?.current ?? 0,
+  };
+  const y = mine?.states.get(addDays(d.today, -1));
+  return { ctx, missedYesterday: y === "missed" || y === "frozen" };
 }
