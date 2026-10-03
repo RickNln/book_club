@@ -7,12 +7,24 @@ const items = [
   { href: "/", label: "Дашборд", d: "M4 13h6V4H4zm10 7h6v-9h-6zM4 20h6v-4H4zm10-11h6V4h-6z" },
   { href: "/today", label: "Сегодня", d: "M12 5v14M5 12h14" },
   { href: "/shelf", label: "Полка", d: "M5 4h3v16H5zm5 0h3v16h-3zm5.5 1 2.9-.8 4 15.5-2.9.8z" },
+  { href: "/feed", label: "Лента", d: "M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4z" },
 ];
 const admin = { href: "/admin", label: "Админ", d: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 8a7 7 0 0 1 14 0" };
 
 function useActive() {
   const path = usePathname();
   return (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+}
+
+/** Число новых мыслей и комментариев других участников; на самой ленте не показываем. */
+function Badge({ n, className = "" }: { n: number; className?: string }) {
+  if (n <= 0) return null;
+  return (
+    <span className={`num grid h-[18px] min-w-[18px] place-items-center rounded-full bg-lamp px-1 text-[10px] font-bold leading-none text-night ${className}`}>
+      {n > 99 ? "99+" : n}
+      <span className="sr-only"> {n % 10 === 1 && n % 100 !== 11 ? "новая запись" : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? "новые записи" : "новых записей"} в ленте</span>
+    </span>
+  );
 }
 
 function Icon({ d, stroke }: { d: string; stroke?: boolean }) {
@@ -24,10 +36,10 @@ function Icon({ d, stroke }: { d: string; stroke?: boolean }) {
   );
 }
 
-/** Нижняя панель — телефон и планшет. */
-export function Nav({ isAdmin }: { isAdmin: boolean }) {
+/** Нижняя панель — телефон и планшет. Админка — в профиле. */
+export function Nav({ unread }: { unread: number }) {
   const on = useActive();
-  const list = isAdmin ? [...items, admin] : items;
+  const list = items;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-night/90 backdrop-blur pb-[env(safe-area-inset-bottom)]
       pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] lg:hidden">
@@ -37,8 +49,9 @@ export function Nav({ isAdmin }: { isAdmin: boolean }) {
           return (
             <li key={it.href} className="min-w-0 flex-1">
               <Link href={it.href} className={`flex flex-col items-center gap-1 py-3 text-[12px] ${on(it.href) ? "text-teal" : "text-muted"}`}>
-                <span className={main ? "grid h-9 w-9 place-items-center rounded-full bg-teal text-night -mt-1" : ""}>
+                <span className={main ? "grid h-9 w-9 place-items-center rounded-full bg-teal text-night -mt-1" : "relative"}>
                   <Icon d={it.d} stroke={main} />
+                  {it.href === "/feed" && !on("/feed") && <Badge n={unread} className="absolute -right-2.5 -top-1.5 ring-2 ring-night" />}
                 </span>
                 {it.label}
               </Link>
@@ -51,7 +64,7 @@ export function Nav({ isAdmin }: { isAdmin: boolean }) {
 }
 
 /** Боковое меню — компьютер. */
-export function Sidebar({ isAdmin, name, avatarUrl }: { isAdmin: boolean; name: string; avatarUrl: string | null }) {
+export function Sidebar({ isAdmin, name, avatarUrl, unread }: { isAdmin: boolean; name: string; avatarUrl: string | null; unread: number }) {
   const on = useActive();
   const list = isAdmin ? [...items.filter((i) => i.href !== "/today"), admin] : items.filter((i) => i.href !== "/today");
   return (
@@ -72,6 +85,7 @@ export function Sidebar({ isAdmin, name, avatarUrl }: { isAdmin: boolean; name: 
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition
                 ${on(it.href) ? "bg-teal/10 text-teal" : "text-muted hover:bg-raised hover:text-ink"}`}>
               <Icon d={it.d} />{it.label}
+              {it.href === "/feed" && !on("/feed") && <Badge n={unread} className="ml-auto" />}
             </Link>
           </li>
         ))}

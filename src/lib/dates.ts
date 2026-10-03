@@ -29,3 +29,10 @@ export function shortDate(day: string) {
 }
 const MONTHS_FULL = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 export function monthName(day: string) { return MONTHS_FULL[Number(day.slice(5, 7)) - 1]; }
+
+/** «сегодня, 21:40» или «3 окт, 21:40» — время в часовом поясе приложения. */
+export function timeLabel(d: Date): string {
+  const day = dayInTz(d);
+  const hm = new Intl.DateTimeFormat("ru-RU", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(d);
+  return `${day === dayInTz() ? "сегодня" : shortDate(day)}, ${hm}`;
+}

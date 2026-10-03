@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { AvatarForm, PasswordForm } from "@/components/forms";
+import Link from "next/link";
 import { logout } from "@/app/actions";
 
 export default async function Profile() {
@@ -18,6 +19,12 @@ export default async function Profile() {
         <h2 className="mb-4 font-semibold">Пароль</h2>
         <PasswordForm />
       </section>
+      {me.role === "admin" && (
+        <Link href="/admin" className="card flex items-center justify-between p-5 hover:bg-raised lg:hidden">
+          <span><span className="block font-semibold">Админка</span><span className="text-[13px] text-muted">Участники, пароли, доступ</span></span>
+          <span aria-hidden="true" className="text-muted">→</span>
+        </Link>
+      )}
       <form action={logout}><button className="w-full rounded-xl px-4 py-3 text-[14px] text-muted hover:bg-raised hover:text-ink">Выйти</button></form>
     </div>
   );

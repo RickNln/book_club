@@ -56,6 +56,13 @@ export function LogForm({ books, canYesterday, fact }: { books: Book[]; canYeste
         <Choice name="level" value="norm" label="20+ минут" defaultChecked />
         <Choice name="level" value="minimum" label="Минимум, 5+" />
       </fieldset>
+      <label className="block">
+        <span className="label">Что запомнилось? <span className="text-muted/70">— необязательно</span></span>
+        <textarea name="note" rows={2} maxLength={1000} placeholder="Мысль, цитата, вопрос к другу…" className="input mt-1 resize-y" />
+      </label>
+      <label className="-mt-1 flex items-center gap-2 text-[14px] text-muted">
+        <input type="checkbox" name="isSpoiler" className="h-4 w-4 accent-teal" /> Спойлер — скрыть в ленте, пока не раскроют
+      </label>
       {canYesterday && (
         <fieldset className="grid grid-cols-2 gap-2">
           <legend className="label mb-1">За какой вечер</legend>

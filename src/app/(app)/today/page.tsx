@@ -6,6 +6,7 @@ import { canBackfillYesterday, today } from "@/lib/dates";
 import { AddBookForm, LogForm } from "@/components/forms";
 import { finishBook, undoEntry } from "@/app/actions";
 import { BookProgress } from "@/components/BookProgress";
+import { TodayNote } from "@/components/TodayNote";
 import Link from "next/link";
 
 export default async function Today() {
@@ -30,9 +31,10 @@ export default async function Today() {
 
       {todays.length > 0 && (
         <section className="card p-5">
-          <ul className="space-y-2">
+          <ul className="space-y-4">
             {todays.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-2">
+              <li key={e.id}>
+              <div className="flex items-center justify-between gap-2">
                 <span className="min-w-0 [overflow-wrap:anywhere]">
                   <span className="num text-teal">+{String(e.values?.pages ?? 0)}</span> стр. · {books.find((b) => b.id === e.itemId)?.title ?? "книга"}
                   {e.level === "minimum" && <span className="text-muted"> · минимум</span>}
@@ -41,10 +43,12 @@ export default async function Today() {
                   <input type="hidden" name="entryId" value={e.id} />
                   <button className="text-[13px] text-muted underline-offset-2 hover:underline">Отменить</button>
                 </form>
+              </div>
+              <TodayNote entryId={e.id} note={e.note} isSpoiler={e.isSpoiler} />
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-[13px] text-muted">Читали ещё одну книгу? Отметьте и её — день засчитается один раз.</p>
+          <p className="mt-3 text-[13px] text-muted">Читали ещё одну книгу? Отметьте и её — день засчитается один раз. Мысли видны всем в <Link href="/feed" className="text-teal">ленте</Link>.</p>
         </section>
       )}
 

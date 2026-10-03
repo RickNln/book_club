@@ -18,6 +18,8 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").default(true).notNull(),
   /** Ссылка или сжатая в браузере картинка (data URL) */
   avatarUrl: text("avatar_url"),
+  /** Когда участник последний раз открывал ленту — для бейджа непрочитанного */
+  lastFeedSeenAt: timestamp("last_feed_seen_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -59,10 +61,25 @@ export const entries = pgTable("entries", {
   level: text("level", { enum: ["norm", "minimum"] }).default("norm").notNull(),
   itemId: integer("item_id").references(() => items.id),
   values: jsonb("values").$type<Record<string, number | string>>().default({}).notNull(),
+  /** «Что запомнилось?» — мысль после чтения, до 1000 символов; попадает в ленту */
+  note: text("note"),
+  isSpoiler: boolean("is_spoiler").default(false).notNull(),
+  noteUpdatedAt: timestamp("note_updated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({ byDay: index("entries_habit_day_idx").on(t.habitId, t.day) }));
+
+/** Комментарии к мысли в ленте, без вложенности. Удаляются вместе с мыслью или отметкой. */
+export const comments = pgTable("comments", {
+  id: serial("id").primaryKey(),
+  entryId: integer("entry_id").references(() => entries.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({ byEntry: index("comments_entry_idx").on(t.entryId, t.createdAt) }));
 
 export type User = typeof users.$inferSelect;
 export type Habit = typeof habits.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type Entry = typeof entries.$inferSelect;
+export type Comment = typeof comments.$inferSelect;

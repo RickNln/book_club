@@ -9,6 +9,7 @@ import { createSession, destroySession, requireAdmin, requireUser } from "@/lib/
 import { addDays, canBackfillYesterday, today } from "@/lib/dates";
 import { readingHabit } from "@/lib/data";
 import { cleanCover, editableBook } from "@/lib/books";
+import { NOTE_MAX, commentsFor, feedPage, groupEntry, type FeedComment, type FeedPage } from "@/lib/feed";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -49,6 +50,8 @@ export async function logReading(_: FormState, f: FormData): Promise<FormState> 
   if (!itemId) return { error: "Выберите книгу или добавьте новую" };
   if (Number.isNaN(pages) || pages > 2000) return { error: "Укажите, сколько страниц прочитали" };
 
+  const note = str(f, "note");
+  if (note.length > NOTE_MAX) return { error: `Мысль — не длиннее ${NOTE_MAX} символов` };
   const [book] = await db().select().from(schema.items)
     .where(and(eq(schema.items.id, itemId), eq(schema.items.userId, me.id)));
   if (!book) return { error: "Это не ваша книга" };
@@ -57,6 +60,8 @@ export async function logReading(_: FormState, f: FormData): Promise<FormState> 
     habitId: habit.id, userId: me.id, day, itemId,
     level: str(f, "level") === "minimum" ? "minimum" : "norm",
     values: { pages },
+    // мысль необязательна — вечер засчитывается и без неё
+    ...(note ? { note, isSpoiler: f.get("isSpoiler") === "on", noteUpdatedAt: new Date() } : {}),
   });
   revalidatePath("/", "layout");
   return { ok: day === t ? "Вечер засчитан" : "Вчерашний вечер засчитан" };
@@ -201,4 +206,95 @@ export async function changeOwnPassword(_: FormState, f: FormData): Promise<Form
   if (next.length < 6) return { error: "Новый пароль — минимум 6 символов" };
   await db().update(schema.users).set({ passwordHash: await bcrypt.hash(next, 10) }).where(eq(schema.users.id, me.id));
   return { ok: "Пароль изменён" };
+}
+
+// ---------- Мысли и лента ----------
+/** Добавить или изменить свою мысль; пустой текст — удалить её. */
+export async function saveNote(_: FormState, f: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const entry = await groupEntry(me, Number(f.get("entryId")));
+  if (!entry || entry.userId !== me.id) return { error: "Менять можно только свою мысль" };
+  const note = str(f, "note");
+  if (note.length > NOTE_MAX) return { error: `Мысль — не длиннее ${NOTE_MAX} символов` };
+  if (!note) {
+    await clearNote(entry.id);
+  } else {
+    await db().update(schema.entries)
+      .set({ note, isSpoiler: f.get("isSpoiler") === "on", noteUpdatedAt: new Date() })
+      .where(eq(schema.entries.id, entry.id));
+  }
+  revalidatePath("/", "layout");
+  return { ok: note ? "Мысль сохранена" : "Мысль удалена" };
+}
+
+/** Мысль удаляется вместе с комментариями; отметка вечера и серия остаются. */
+async function clearNote(entryId: number) {
+  await db().delete(schema.comments).where(eq(schema.comments.entryId, entryId));
+  await db().update(schema.entries)
+    .set({ note: null, isSpoiler: false, noteUpdatedAt: null })
+    .where(eq(schema.entries.id, entryId));
+}
+
+/** Удалить мысль: автор или админ группы. */
+export async function deleteNote(entryId: number): Promise<{ error?: string }> {
+  const me = await requireUser();
+  const entry = await groupEntry(me, entryId);
+  if (!entry || (entry.userId !== me.id && me.role !== "admin")) return { error: "Удалить эту мысль может только автор или админ" };
+  await clearNote(entry.id);
+  revalidatePath("/", "layout");
+  return {};
+}
+
+type CommentsResult = { error?: string; comments?: FeedComment[] };
+const cleanComment = (v: unknown) => String(v ?? "").trim();
+
+export async function addComment(entryId: number, text: string): Promise<CommentsResult> {
+  const me = await requireUser();
+  const t = cleanComment(text);
+  if (!t) return { error: "Напишите комментарий" };
+  if (t.length > NOTE_MAX) return { error: `Комментарий — не длиннее ${NOTE_MAX} символов` };
+  const entry = await groupEntry(me, entryId);
+  if (!entry || !entry.note) return { error: "Мысль уже удалили" };
+  // время ставит приложение — как и last_feed_seen_at, чтобы бейдж не зависел от часового пояса базы
+  const now = new Date();
+  await db().insert(schema.comments).values({ entryId: entry.id, userId: me.id, text: t, createdAt: now, updatedAt: now });
+  return { comments: (await commentsFor(me, [entry.id]))[entry.id] };
+}
+
+export async function updateComment(commentId: number, text: string): Promise<CommentsResult> {
+  const me = await requireUser();
+  const t = cleanComment(text);
+  if (!t) return { error: "Комментарий не может быть пустым" };
+  if (t.length > NOTE_MAX) return { error: `Комментарий — не длиннее ${NOTE_MAX} символов` };
+  const [c] = await db().select().from(schema.comments).where(eq(schema.comments.id, commentId));
+  if (!c || c.userId !== me.id) return { error: "Менять можно только свой комментарий" };
+  await db().update(schema.comments).set({ text: t, updatedAt: new Date() }).where(eq(schema.comments.id, c.id));
+  return { comments: (await commentsFor(me, [c.entryId]))[c.entryId] };
+}
+
+export async function deleteComment(commentId: number): Promise<CommentsResult> {
+  const me = await requireUser();
+  const [c] = await db().select().from(schema.comments).where(eq(schema.comments.id, commentId));
+  const entry = c && await groupEntry(me, c.entryId);
+  if (!c || !entry || (c.userId !== me.id && me.role !== "admin")) return { error: "Удалить комментарий может только автор или админ" };
+  await db().delete(schema.comments).where(eq(schema.comments.id, c.id));
+  return { comments: (await commentsFor(me, [c.entryId]))[c.entryId] };
+}
+
+/** Следующие 20 мыслей ленты. */
+export async function loadFeed(cursor: string): Promise<FeedPage> {
+  return feedPage(await requireUser(), cursor);
+}
+
+/** Свежие комментарии к показанным мыслям — лента опрашивает, пока открыта. */
+export async function refreshComments(entryIds: number[]): Promise<Record<number, FeedComment[]>> {
+  const ids = entryIds.filter((n) => Number.isInteger(n)).slice(0, 200);
+  return commentsFor(await requireUser(), ids);
+}
+
+/** Лента открыта — бейдж непрочитанного обнуляется. */
+export async function markFeedSeen() {
+  const me = await requireUser();
+  await db().update(schema.users).set({ lastFeedSeenAt: new Date() }).where(eq(schema.users.id, me.id));
+  revalidatePath("/", "layout");
 }
