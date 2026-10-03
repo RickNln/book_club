@@ -10,7 +10,7 @@ async function main() {
   if (!password) throw new Error("Задайте ADMIN_PASSWORD в .env");
 
   let [group] = await db().select().from(schema.groups);
-  if (!group) [group] = await db().insert(schema.groups).values({ name: "Книжная ночь" }).returning();
+  if (!group) [group] = await db().insert(schema.groups).values({ name: "Книга на ночь" }).returning();
 
   const [habit] = await db().select().from(schema.habits).where(eq(schema.habits.groupId, group.id));
   if (!habit) {

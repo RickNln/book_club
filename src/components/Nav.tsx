@@ -73,7 +73,7 @@ export function Sidebar({ isAdmin, name, avatarUrl, unread }: { isAdmin: boolean
       <Link href="/" className="flex items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon.svg" alt="" className="h-10 w-10" />
-        <span className="font-display text-[17px] font-bold leading-tight">Книжная<br />ночь</span>
+        <span className="font-display text-[17px] font-bold leading-tight">Книга<br />на ночь</span>
       </Link>
 
       <Link href="/today" className="btn-primary mt-10 w-full">Отметить вечер</Link>

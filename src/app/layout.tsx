@@ -2,11 +2,15 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Книжная ночь",
+  title: "Книга на ночь",
   description: "Читаем перед сном и смотрим, какие мы молодцы",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Книжная ночь", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  appleWebApp: { capable: true, title: "Книга на ночь", statusBarStyle: "black-translucent" },
+  // вкладка — SVG; экран «Домой» на iPhone берёт только PNG (scripts/make-icons.mjs)
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 export const viewport: Viewport = {
   themeColor: "#0B1220", width: "device-width", initialScale: 1, viewportFit: "cover",

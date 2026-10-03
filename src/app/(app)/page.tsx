@@ -5,7 +5,7 @@ import { shortDate } from "@/lib/dates";
 import { Wave } from "@/components/Wave";
 import { Leaderboard } from "@/components/Leaderboard";
 import { MonthGrid } from "@/components/MonthGrid";
-import { BookProgress } from "@/components/BookProgress";
+import { ReadingNowCard } from "@/components/BookProgress";
 import { Flame } from "@/components/Flame";
 import { Avatar } from "@/components/Avatar";
 import { FactCard } from "@/components/FactCard";
@@ -29,7 +29,7 @@ export default async function Dashboard() {
         <div className="min-w-0">
           <div className="label">{shortDate(d.today)}</div>
           <h1 className="truncate font-display text-xl font-bold lg:text-3xl">
-            {doneToday ? "Вечер засчитан" : "Книжная ночь"}
+            {doneToday ? "Вечер засчитан" : "Книга на ночь"}
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-3 lg:hidden">
@@ -78,14 +78,16 @@ export default async function Dashboard() {
 
       <div className="lg:col-span-5"><Leaderboard stats={d.stats} meId={me.id} /></div>
 
-      <section className="card p-5 lg:col-span-7">
+      {/* на компьютере — во всю ширину внизу: две колонки с крупными обложками */}
+      <section className="card p-5 lg:order-last lg:col-span-12 lg:p-7">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-          <h2 className="font-semibold">На тумбочке</h2>
+          <h2 className="font-semibold">Читают сейчас</h2>
           <Link href="/shelf" className="text-[13px] text-teal">Вся полка</Link>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5 [&>*]:min-w-0">
+        <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-x-8 lg:gap-y-6 [&>*]:min-w-0">
           {d.stats.filter((s) => s.activeBook).map((s) => (
-            <BookProgress key={s.user.id} book={s.activeBook!} who={s.user.id === me.id ? "Вы" : s.user.name} whoAvatar={<Avatar name={s.user.name} url={s.user.avatarUrl} size={20} />} />
+            <ReadingNowCard key={s.user.id} book={s.activeBook!} who={s.user.id === me.id ? "Вы" : s.user.name}
+              avatar={<Avatar name={s.user.name} url={s.user.avatarUrl} size={22} />} />
           ))}
           {!d.stats.some((s) => s.activeBook) && (
             <p className="text-muted">Пока никто не начал книгу. <Link href="/today" className="text-teal">Добавить свою</Link></p>
@@ -93,7 +95,7 @@ export default async function Dashboard() {
         </div>
       </section>
 
-      <div className="lg:col-span-12"><MonthGrid stats={d.stats} monthStart={d.monthStart} today={d.today} /></div>
+      <div className="lg:col-span-7"><MonthGrid stats={d.stats} monthStart={d.monthStart} today={d.today} /></div>
     </div>
   );
 }
