@@ -1,10 +1,12 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/auth";
-import { factContext, groupDashboard, readingHabit } from "@/lib/data";
+import { factContext, groupDashboard, readingHabit, streakInfo } from "@/lib/data";
 import { canBackfillYesterday, today } from "@/lib/dates";
 import { AddBookForm, LogForm } from "@/components/forms";
-import { finishBook, undoEntry } from "@/app/actions";
+import { undoEntry } from "@/app/actions";
+import { FinishBookButton } from "@/components/FinishBook";
+import { StreakPanel } from "@/components/Streak";
 import { BookProgress } from "@/components/BookProgress";
 import { TodayNote } from "@/components/TodayNote";
 import Link from "next/link";
@@ -19,15 +21,21 @@ export default async function Today() {
     .where(and(eq(schema.entries.userId, me.id), eq(schema.entries.habitId, habit.id)))
     .orderBy(desc(schema.entries.createdAt));
   const todays = myEntries.filter((e) => e.day === t);
-  const fc = factContext(await groupDashboard(me), me);
+  const dash = await groupDashboard(me);
+  const fc = factContext(dash, me);
   const read = (id: number) => myEntries.filter((e) => e.itemId === id).reduce((a, e) => a + Number(e.values?.pages ?? 0), 0);
 
   return (
     <div className="space-y-4 lg:space-y-6">
-      <header>
-        <div className="label">Норма — {habit.targetMinutes} минут, засчитывается от {habit.minMinutes}</div>
-        <h1 className="font-display text-xl font-bold lg:text-3xl">{todays.length ? "Вечер засчитан" : "Как прошёл вечер?"}</h1>
+      <header className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <div className="label">Норма — {habit.targetMinutes} минут, засчитывается от {habit.minMinutes}</div>
+          <h1 className="font-display text-xl font-bold lg:text-3xl">{todays.length ? "Вечер засчитан" : "Как прошёл вечер?"}</h1>
+        </div>
+        <Link href="/sessions" className="shrink-0 pb-1 text-[13px] text-teal">Мои сессии</Link>
       </header>
+
+      <StreakPanel info={streakInfo(dash, me)} />
 
       {todays.length > 0 && (
         <section className="card p-5">
@@ -69,10 +77,7 @@ export default async function Today() {
                 <BookProgress book={{ ...b, pagesRead: read(b.id) }} />
                 <div className="mt-2 flex justify-end gap-4">
                   <Link href={`/books/${b.id}`} className="text-[13px] text-muted hover:text-ink">Изменить</Link>
-                  <form action={finishBook}>
-                    <input type="hidden" name="itemId" value={b.id} />
-                    <button className="text-[13px] text-teal">Дочитал — на полку</button>
-                  </form>
+                  <FinishBookButton itemId={b.id} title={b.title} />
                 </div>
               </div>
             ))}

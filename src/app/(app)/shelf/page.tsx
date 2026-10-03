@@ -7,6 +7,7 @@ import { readingHabit } from "@/lib/data";
 import { diffDays, shortDate } from "@/lib/dates";
 import { Cover } from "@/components/BookProgress";
 import { Avatar } from "@/components/Avatar";
+import { Stars } from "@/components/Stars";
 
 export default async function Shelf() {
   const me = await requireUser();
@@ -19,6 +20,20 @@ export default async function Shelf() {
   const evenings = (id: number) => new Set(entries.filter((e) => e.itemId === id).map((e) => e.day)).size;
   const pages = (id: number) => entries.filter((e) => e.itemId === id).reduce((a, e) => a + Number(e.values?.pages ?? 0), 0);
   const canEdit = (b: Item) => b.userId === me.id || me.role === "admin";
+  // одна и та же книга у нескольких участников — по названию без учёта регистра
+  const titleKey = (t: string) => t.trim().toLocaleLowerCase("ru-RU").replace(/\s+/g, " ");
+  const club = new Map<string, { readers: number; ratings: number[] }>();
+  for (const b of books) {
+    if (b.status !== "finished") continue;
+    const c = club.get(titleKey(b.title)) ?? { readers: 0, ratings: [] };
+    c.readers++;
+    if (b.rating) c.ratings.push(b.rating);
+    club.set(titleKey(b.title), c);
+  }
+  const clubOf = (b: Item) => {
+    const c = club.get(titleKey(b.title));
+    return c && c.readers > 1 && c.ratings.length ? { avg: c.ratings.reduce((a, r) => a + r, 0) / c.ratings.length, n: c.ratings.length } : null;
+  };
   // свои — первыми
   const ordered = [...users].sort((a, b) => (a.id === me.id ? -1 : b.id === me.id ? 1 : a.name.localeCompare(b.name)));
 
@@ -36,6 +51,24 @@ export default async function Shelf() {
           {shortDate(b.startedOn)} – {shortDate(b.finishedOn)} ({diffDays(b.finishedOn, b.startedOn) + 1} дн.)
         </div>
       )}
+      {b.status === "finished" && (
+        b.rating
+          ? <div className="mt-0.5"><Stars value={b.rating} className="text-[14px]" /></div>
+          : b.userId === me.id
+            ? <div className="mt-0.5"><Link href={`/books/${b.id}`} className="text-[12px] text-teal">☆ Оценить</Link></div>
+            : <div className="mt-0.5 text-[12px] text-muted">без оценки</div>
+      )}
+      {b.status === "finished" && b.review && (
+        <p className="mt-1 line-clamp-3 text-[12px] italic leading-snug text-muted [overflow-wrap:anywhere]" title={b.review}>«{b.review}»</p>
+      )}
+      {(() => {
+        const c = b.status === "finished" ? clubOf(b) : null;
+        return c && (
+          <div className="mt-1 text-[11px] text-muted" title="Средняя оценка клуба">
+            клуб <span className="text-lamp">★</span> <span className="num text-ink">{c.avg.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}</span> · {c.n} {c.n === 1 ? "оценка" : c.n < 5 ? "оценки" : "оценок"}
+          </div>
+        );
+      })()}
       {canEdit(b) && (
         <Link href={`/books/${b.id}`}
           className="mt-1 inline-block text-[12px] text-teal lg:absolute lg:right-1.5 lg:top-1.5 lg:mt-0 lg:rounded-md lg:bg-night/85 lg:px-2 lg:py-1 lg:opacity-0 lg:transition lg:group-hover:opacity-100 lg:focus:opacity-100">

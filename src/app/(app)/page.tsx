@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { factContext, groupDashboard } from "@/lib/data";
+import { factContext, groupDashboard, streakInfo } from "@/lib/data";
 import { shortDate } from "@/lib/dates";
 import { Wave } from "@/components/Wave";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -9,6 +9,7 @@ import { BookProgress } from "@/components/BookProgress";
 import { Flame } from "@/components/Flame";
 import { Avatar } from "@/components/Avatar";
 import { FactCard } from "@/components/FactCard";
+import { StreakPanel } from "@/components/Streak";
 
 const plural = (n: number, one: string, few: string, many: string) => {
   const a = n % 10, b = n % 100;
@@ -32,10 +33,11 @@ export default async function Dashboard() {
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-3 lg:hidden">
-          {!doneToday && <Link href="/today" className="btn-primary whitespace-nowrap px-4 py-2.5 text-[14px] max-[399px]:px-3 max-[399px]:text-[13px]">Отметить вечер</Link>}
           <Link href="/profile" aria-label="Профиль"><Avatar name={me.name} url={me.avatarUrl} size={40} /></Link>
         </div>
       </header>
+
+      <StreakPanel info={streakInfo(d, me)} cta className="lg:col-span-12" />
 
       <section className="card overflow-hidden p-5 lg:col-span-8 lg:p-7">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
@@ -55,7 +57,7 @@ export default async function Dashboard() {
 
       <FactCard ctx={fc.ctx} missedYesterday={fc.missedYesterday} today={d.today} className="lg:col-span-8" />
 
-      <div className="grid grid-cols-3 gap-3 max-[399px]:gap-2 lg:col-span-4 lg:col-start-9 lg:row-span-2 lg:row-start-2 lg:grid-cols-1 lg:gap-5 [&>*]:min-w-0">
+      <div className="grid grid-cols-3 gap-3 max-[399px]:gap-2 lg:col-span-4 lg:col-start-9 lg:row-span-2 lg:row-start-3 lg:grid-cols-1 lg:gap-5 [&>*]:min-w-0">
         <div className="card px-3 py-4 max-[399px]:px-2.5 max-[399px]:py-3 lg:flex lg:flex-col lg:justify-center lg:p-6">
           <div className="label truncate max-[399px]:text-[12px]">Эта неделя</div>
           <div className="num mt-1 whitespace-nowrap text-[clamp(18px,5vw,24px)] font-bold lg:text-4xl">{d.thisWeek}%</div>

@@ -9,9 +9,10 @@ const style: Record<string, string> = {
   missed: "ring-1 ring-line",
   future: "ring-1 ring-dashed ring-teal/50",
   before: "ring-1 ring-line/50 opacity-40",
+  after: "ring-1 ring-line/50 opacity-40",
 };
 const title: Record<string, string> = {
-  norm: "норма", minimum: "минимум", frozen: "заморозка", missed: "пропуск", future: "сегодня", before: "",
+  norm: "норма", minimum: "минимум", frozen: "заморозка — серия цела", missed: "пропуск", future: "сегодня", before: "не участвовал", after: "",
 };
 
 export function MonthGrid({ stats, monthStart, today }: { stats: MemberStats[]; monthStart: string; today: string }) {
@@ -36,11 +37,11 @@ export function MonthGrid({ stats, monthStart, today }: { stats: MemberStats[]; 
                   </span>
                 </th>
                 {days.map((d, i) => {
-                  const after = diffDays(d, today) > 0;
-                  const s = after ? "before" : m.states.get(d) ?? "before";
+                  // будущие дни и дни до появления участника — бледные, не пропуск
+                  const s = diffDays(d, today) > 0 ? "after" : m.states.get(d) ?? "before";
                   return (
                     <td key={d} className={`p-[3px] ${i === days.length - 1 ? "pr-5" : ""}`}>
-                      <span title={`${Number(d.slice(8))}: ${title[s]}`}
+                      <span title={title[s] ? `${Number(d.slice(8))}: ${title[s]}` : String(Number(d.slice(8)))}
                         className={`grid h-6 w-6 lg:h-7 lg:w-7 place-items-center rounded-full text-[10px] font-bold ${style[s]}`}>
                         {s === "norm" ? "✓" : s === "frozen" ? "❄" : ""}
                       </span>

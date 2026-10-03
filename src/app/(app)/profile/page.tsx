@@ -19,6 +19,10 @@ export default async function Profile() {
         <h2 className="mb-4 font-semibold">Пароль</h2>
         <PasswordForm />
       </section>
+      <Link href="/sessions" className="card flex items-center justify-between p-5 hover:bg-raised">
+        <span><span className="block font-semibold">Мои сессии</span><span className="text-[13px] text-muted">История отметок: изменить или удалить</span></span>
+        <span aria-hidden="true" className="text-muted">→</span>
+      </Link>
       {me.role === "admin" && (
         <Link href="/admin" className="card flex items-center justify-between p-5 hover:bg-raised lg:hidden">
           <span><span className="block font-semibold">Админка</span><span className="text-[13px] text-muted">Участники, пароли, доступ</span></span>

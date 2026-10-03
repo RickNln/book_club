@@ -1,5 +1,5 @@
 import {
-  pgTable, serial, text, integer, boolean, timestamp, jsonb, date, index,
+  pgTable, serial, text, integer, smallint, boolean, timestamp, jsonb, date, index,
 } from "drizzle-orm/pg-core";
 
 export const groups = pgTable("groups", {
@@ -50,6 +50,12 @@ export const items = pgTable("items", {
   status: text("status", { enum: ["active", "finished"] }).default("active").notNull(),
   startedOn: date("started_on", { mode: "string" }).notNull(),
   finishedOn: date("finished_on", { mode: "string" }),
+  /** Оценка 1–5; null — без оценки (пропустил, можно поставить позже) */
+  rating: smallint("rating"),
+  review: text("review"),
+  /** Когда нажали «Дочитал» — время записи в ленте; у книг, дочитанных до оценок, пусто */
+  finishedAt: timestamp("finished_at"),
+  reviewUpdatedAt: timestamp("review_updated_at"),
 }, (t) => ({ byUser: index("items_user_idx").on(t.userId, t.status) }));
 
 /** Отметка за день. Несколько записей в день допустимы (две книги), день засчитывается один раз. */
@@ -64,14 +70,20 @@ export const entries = pgTable("entries", {
   /** «Что запомнилось?» — мысль после чтения, до 1000 символов; попадает в ленту */
   note: text("note"),
   isSpoiler: boolean("is_spoiler").default(false).notNull(),
+  /** Когда мысль появилась — порядок ленты; разница с noteUpdatedAt даёт пометку «изменено» */
+  noteCreatedAt: timestamp("note_created_at"),
   noteUpdatedAt: timestamp("note_updated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({ byDay: index("entries_habit_day_idx").on(t.habitId, t.day) }));
 
-/** Комментарии к мысли в ленте, без вложенности. Удаляются вместе с мыслью или отметкой. */
+/**
+ * Комментарии в ленте, без вложенности: к мысли (entryId) или к записи «дочитал(а)» (itemId) —
+ * ровно одно из двух. Удаляются вместе с мыслью, отметкой или книгой.
+ */
 export const comments = pgTable("comments", {
   id: serial("id").primaryKey(),
-  entryId: integer("entry_id").references(() => entries.id, { onDelete: "cascade" }).notNull(),
+  entryId: integer("entry_id").references(() => entries.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").references(() => items.id, { onDelete: "cascade" }),
   userId: integer("user_id").references(() => users.id).notNull(),
   text: text("text").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

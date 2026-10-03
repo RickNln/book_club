@@ -9,7 +9,8 @@ import { createSession, destroySession, requireAdmin, requireUser } from "@/lib/
 import { addDays, canBackfillYesterday, today } from "@/lib/dates";
 import { readingHabit } from "@/lib/data";
 import { cleanCover, editableBook } from "@/lib/books";
-import { NOTE_MAX, commentsFor, feedPage, groupEntry, type FeedComment, type FeedPage } from "@/lib/feed";
+import { NOTE_MAX, commentsFor, feedPage, groupEntry, groupFinishedItem, parseTarget, type FeedComment, type FeedPage } from "@/lib/feed";
+import type { Entry } from "@/db/schema";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -61,7 +62,7 @@ export async function logReading(_: FormState, f: FormData): Promise<FormState> 
     level: str(f, "level") === "minimum" ? "minimum" : "norm",
     values: { pages },
     // мысль необязательна — вечер засчитывается и без неё
-    ...(note ? { note, isSpoiler: f.get("isSpoiler") === "on", noteUpdatedAt: new Date() } : {}),
+    ...(note ? { note, isSpoiler: f.get("isSpoiler") === "on", noteCreatedAt: new Date(), noteUpdatedAt: new Date() } : {}),
   });
   revalidatePath("/", "layout");
   return { ok: day === t ? "Вечер засчитан" : "Вчерашний вечер засчитан" };
@@ -133,13 +134,57 @@ export async function deleteBook(f: FormData) {
   redirect("/shelf");
 }
 
-export async function finishBook(f: FormData) {
+/** Оценка 1–5 из формы; null — не выбрана. */
+const ratingOf = (f: FormData) => {
+  const r = Number(str(f, "rating"));
+  return Number.isInteger(r) && r >= 1 && r <= 5 ? r : null;
+};
+
+/**
+ * «Дочитал»: книга уходит на полку и в ленту. Оценка обязательна,
+ * если не нажали «Пропустить» — тогда её можно поставить позже на странице книги.
+ */
+export async function finishBook(_: FormState, f: FormData): Promise<FormState> {
   const me = await requireUser();
   const id = Number(f.get("itemId"));
-  await db().update(schema.items)
-    .set({ status: "finished", finishedOn: today() })
+  const skip = str(f, "skip") === "1";
+  const rating = skip ? null : ratingOf(f);
+  const review = skip ? "" : str(f, "review");
+  if (!skip && !rating) return { error: "Поставьте оценку от 1 до 5 звёзд или нажмите «Пропустить»" };
+  if (review.length > NOTE_MAX) return { error: `Отзыв — не длиннее ${NOTE_MAX} символов` };
+  const [book] = await db().select().from(schema.items)
     .where(and(eq(schema.items.id, id), eq(schema.items.userId, me.id)));
+  if (!book) return { error: "Это не ваша книга" };
+  const now = new Date();
+  await db().update(schema.items)
+    .set({
+      status: "finished", finishedOn: book.finishedOn ?? today(), finishedAt: book.finishedAt ?? now,
+      rating, review: review || null, reviewUpdatedAt: book.finishedAt ?? now,
+    })
+    .where(eq(schema.items.id, book.id));
   revalidatePath("/", "layout");
+  return { ok: rating ? `«${book.title}» на полке — ${"★".repeat(rating)}` : `«${book.title}» на полке` };
+}
+
+/** Оценка и отзыв дочитанной книги — правит только владелец. Первая оценка выводит книгу в ленту. */
+export async function rateBook(_: FormState, f: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const rating = ratingOf(f);
+  const review = str(f, "review");
+  if (!rating) return { error: "Выберите оценку от 1 до 5 звёзд" };
+  if (review.length > NOTE_MAX) return { error: `Отзыв — не длиннее ${NOTE_MAX} символов` };
+  const [book] = await db().select().from(schema.items)
+    .where(and(eq(schema.items.id, Number(f.get("itemId"))), eq(schema.items.userId, me.id)));
+  if (!book) return { error: "Оценку ставит только тот, кто читал книгу" };
+  if (book.status !== "finished") return { error: "Оценить можно дочитанную книгу" };
+  const now = new Date();
+  // первая оценка после «Пропустить» — не правка: пометки «изменено» нет
+  const first = book.rating == null && !book.review;
+  await db().update(schema.items)
+    .set({ rating, review: review || null, finishedAt: book.finishedAt ?? now, reviewUpdatedAt: first ? (book.finishedAt ?? now) : now })
+    .where(eq(schema.items.id, book.id));
+  revalidatePath("/", "layout");
+  return { ok: "Оценка сохранена" };
 }
 
 // ---------- Админка ----------
@@ -209,6 +254,18 @@ export async function changeOwnPassword(_: FormState, f: FormData): Promise<Form
 }
 
 // ---------- Мысли и лента ----------
+/**
+ * Поля мысли для сохранения: новая получает время создания, правка — только время изменения
+ * (по разнице появляется пометка «изменено»). null — мысль надо удалить.
+ */
+function notePatch(entry: Entry, note: string, isSpoiler: boolean) {
+  if (!note) return null;
+  const now = new Date();
+  if (!entry.note) return { note, isSpoiler, noteCreatedAt: now, noteUpdatedAt: now };
+  if (entry.note === note && entry.isSpoiler === isSpoiler) return {};
+  return { note, isSpoiler, noteUpdatedAt: now };
+}
+
 /** Добавить или изменить свою мысль; пустой текст — удалить её. */
 export async function saveNote(_: FormState, f: FormData): Promise<FormState> {
   const me = await requireUser();
@@ -216,13 +273,9 @@ export async function saveNote(_: FormState, f: FormData): Promise<FormState> {
   if (!entry || entry.userId !== me.id) return { error: "Менять можно только свою мысль" };
   const note = str(f, "note");
   if (note.length > NOTE_MAX) return { error: `Мысль — не длиннее ${NOTE_MAX} символов` };
-  if (!note) {
-    await clearNote(entry.id);
-  } else {
-    await db().update(schema.entries)
-      .set({ note, isSpoiler: f.get("isSpoiler") === "on", noteUpdatedAt: new Date() })
-      .where(eq(schema.entries.id, entry.id));
-  }
+  const patch = notePatch(entry, note, f.get("isSpoiler") === "on");
+  if (!patch) await clearNote(entry.id);
+  else if (Object.keys(patch).length) await db().update(schema.entries).set(patch).where(eq(schema.entries.id, entry.id));
   revalidatePath("/", "layout");
   return { ok: note ? "Мысль сохранена" : "Мысль удалена" };
 }
@@ -231,7 +284,7 @@ export async function saveNote(_: FormState, f: FormData): Promise<FormState> {
 async function clearNote(entryId: number) {
   await db().delete(schema.comments).where(eq(schema.comments.entryId, entryId));
   await db().update(schema.entries)
-    .set({ note: null, isSpoiler: false, noteUpdatedAt: null })
+    .set({ note: null, isSpoiler: false, noteCreatedAt: null, noteUpdatedAt: null })
     .where(eq(schema.entries.id, entryId));
 }
 
@@ -245,20 +298,68 @@ export async function deleteNote(entryId: number): Promise<{ error?: string }> {
   return {};
 }
 
+// ---------- История сессий ----------
+/**
+ * Правка своей сессии: книга (из своих), страницы, норма/минимум, мысль, спойлер.
+ * Дату не меняем — задним числом пропуски не закрыть.
+ */
+export async function updateSession(_: FormState, f: FormData): Promise<FormState> {
+  const me = await requireUser();
+  const entry = await groupEntry(me, Number(f.get("entryId")));
+  if (!entry || entry.userId !== me.id) return { error: "Менять можно только свою сессию" };
+  const pages = num(f, "pages");
+  if (Number.isNaN(pages) || pages > 2000) return { error: "Страниц — от 0 до 2000" };
+  const note = str(f, "note");
+  if (note.length > NOTE_MAX) return { error: `Мысль — не длиннее ${NOTE_MAX} символов` };
+  const [book] = await db().select({ id: schema.items.id }).from(schema.items)
+    .where(and(eq(schema.items.id, Number(str(f, "itemId"))), eq(schema.items.userId, me.id)));
+  if (!book) return { error: "Выберите свою книгу" };
+  const patch = notePatch(entry, note, f.get("isSpoiler") === "on");
+  if (!patch) await clearNote(entry.id);
+  await db().update(schema.entries).set({
+    itemId: book.id,
+    level: str(f, "level") === "minimum" ? "minimum" : "norm",
+    values: { ...entry.values, pages },
+    ...(patch ?? {}),
+  }).where(eq(schema.entries.id, entry.id));
+  revalidatePath("/", "layout");
+  return { ok: "Сохранено" };
+}
+
+/** Удалить сессию: свою — всегда, чужую — только админ (например, ошибочную). */
+export async function deleteSession(entryId: number): Promise<{ error?: string }> {
+  const me = await requireUser();
+  const entry = await groupEntry(me, entryId);
+  if (!entry || (entry.userId !== me.id && me.role !== "admin")) return { error: "Удалить сессию может только автор или админ" };
+  // комментарии к мысли удалятся каскадом
+  await db().delete(schema.entries).where(eq(schema.entries.id, entry.id));
+  revalidatePath("/", "layout");
+  return {};
+}
+
+// ---------- Комментарии ----------
 type CommentsResult = { error?: string; comments?: FeedComment[] };
 const cleanComment = (v: unknown) => String(v ?? "").trim();
+const keyOf = (c: { entryId: number | null; itemId: number | null }) => (c.entryId ? `e${c.entryId}` : `i${c.itemId}`);
 
-export async function addComment(entryId: number, text: string): Promise<CommentsResult> {
+/** Комментарий к мысли («e12») или к записи «дочитал(а)» («i5»). */
+export async function addComment(target: string, text: string): Promise<CommentsResult> {
   const me = await requireUser();
   const t = cleanComment(text);
   if (!t) return { error: "Напишите комментарий" };
   if (t.length > NOTE_MAX) return { error: `Комментарий — не длиннее ${NOTE_MAX} символов` };
-  const entry = await groupEntry(me, entryId);
-  if (!entry || !entry.note) return { error: "Мысль уже удалили" };
+  const to = parseTarget(target);
+  if (!to) return { error: "Запись не найдена" };
+  if ("entryId" in to) {
+    const entry = await groupEntry(me, to.entryId);
+    if (!entry || !entry.note) return { error: "Мысль уже удалили" };
+  } else if (!(await groupFinishedItem(me, to.itemId))) {
+    return { error: "Запись о книге уже убрали" };
+  }
   // время ставит приложение — как и last_feed_seen_at, чтобы бейдж не зависел от часового пояса базы
   const now = new Date();
-  await db().insert(schema.comments).values({ entryId: entry.id, userId: me.id, text: t, createdAt: now, updatedAt: now });
-  return { comments: (await commentsFor(me, [entry.id]))[entry.id] };
+  await db().insert(schema.comments).values({ ...to, userId: me.id, text: t, createdAt: now, updatedAt: now });
+  return { comments: (await commentsFor(me, [target]))[target] };
 }
 
 export async function updateComment(commentId: number, text: string): Promise<CommentsResult> {
@@ -269,27 +370,28 @@ export async function updateComment(commentId: number, text: string): Promise<Co
   const [c] = await db().select().from(schema.comments).where(eq(schema.comments.id, commentId));
   if (!c || c.userId !== me.id) return { error: "Менять можно только свой комментарий" };
   await db().update(schema.comments).set({ text: t, updatedAt: new Date() }).where(eq(schema.comments.id, c.id));
-  return { comments: (await commentsFor(me, [c.entryId]))[c.entryId] };
+  return { comments: (await commentsFor(me, [keyOf(c)]))[keyOf(c)] };
 }
 
 export async function deleteComment(commentId: number): Promise<CommentsResult> {
   const me = await requireUser();
   const [c] = await db().select().from(schema.comments).where(eq(schema.comments.id, commentId));
-  const entry = c && await groupEntry(me, c.entryId);
-  if (!c || !entry || (c.userId !== me.id && me.role !== "admin")) return { error: "Удалить комментарий может только автор или админ" };
+  // commentsFor отдаёт только комментарии своей группы — так админ не удалит чужую группу
+  const visible = c && (await commentsFor(me, [keyOf(c)]))[keyOf(c)].some((x) => x.id === c.id);
+  if (!c || !visible || (c.userId !== me.id && me.role !== "admin")) return { error: "Удалить комментарий может только автор или админ" };
   await db().delete(schema.comments).where(eq(schema.comments.id, c.id));
-  return { comments: (await commentsFor(me, [c.entryId]))[c.entryId] };
+  return { comments: (await commentsFor(me, [keyOf(c)]))[keyOf(c)] };
 }
 
-/** Следующие 20 мыслей ленты. */
+/** Следующие 20 записей ленты. */
 export async function loadFeed(cursor: string): Promise<FeedPage> {
   return feedPage(await requireUser(), cursor);
 }
 
-/** Свежие комментарии к показанным мыслям — лента опрашивает, пока открыта. */
-export async function refreshComments(entryIds: number[]): Promise<Record<number, FeedComment[]>> {
-  const ids = entryIds.filter((n) => Number.isInteger(n)).slice(0, 200);
-  return commentsFor(await requireUser(), ids);
+/** Свежие комментарии к показанным записям — лента опрашивает, пока открыта. */
+export async function refreshComments(keys: string[]): Promise<Record<string, FeedComment[]>> {
+  const ok = keys.filter((k) => typeof k === "string" && parseTarget(k)).slice(0, 200);
+  return commentsFor(await requireUser(), ok);
 }
 
 /** Лента открыта — бейдж непрочитанного обнуляется. */

@@ -40,7 +40,10 @@ export default async function Admin() {
             </div>
             <div className="mt-3"><AvatarForm userId={u.id} name={u.name} url={u.avatarUrl} compact /></div>
             <ResetPasswordForm userId={u.id} />
-            <Link href={`/shelf#u-${u.id}`} className="mt-2 inline-block text-[13px] text-teal">Книги участника</Link>
+            <div className="mt-2 flex flex-wrap gap-x-4 text-[13px]">
+              <Link href={`/shelf#u-${u.id}`} className="text-teal">Книги участника</Link>
+              <Link href={`/sessions?user=${u.id}`} className="text-teal">Сессии участника</Link>
+            </div>
           </li>
         ))}
       </ul>

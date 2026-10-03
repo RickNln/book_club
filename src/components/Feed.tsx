@@ -4,20 +4,21 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import {
   addComment, deleteComment, deleteNote, loadFeed, markFeedSeen, refreshComments, saveNote, updateComment,
 } from "@/app/actions";
-import type { FeedComment, FeedItem, FeedPage } from "@/lib/feed";
+import type { FeedComment, FeedItem, FeedPage, FinishedItem, NoteItem } from "@/lib/feed";
 import { Avatar } from "./Avatar";
 import { Cover } from "./BookProgress";
+import { Stars } from "./Stars";
 
 const NOTE_MAX = 1000;
 const POLL_MS = 15_000;
 
-/** Лента мыслей: подгрузка по 20, комментарии обновляются без перезагрузки. */
+/** Лента: мысли и «дочитал(а)», подгрузка по 20, комментарии обновляются без перезагрузки. */
 export function FeedList({ initial }: { initial: FeedPage }) {
   const [items, setItems] = useState(initial.items);
   const [next, setNext] = useState(initial.next);
   const [loading, startLoading] = useTransition();
-  const ids = useRef<number[]>([]);
-  ids.current = items.map((i) => i.id);
+  const keys = useRef<string[]>([]);
+  keys.current = items.map((i) => i.key);
 
   // открыли ленту — бейдж непрочитанного обнуляется
   useEffect(() => { markFeedSeen(); }, []);
@@ -25,10 +26,10 @@ export function FeedList({ initial }: { initial: FeedPage }) {
   // новые комментарии других участников появляются сами, пока лента открыта
   useEffect(() => {
     const tick = async () => {
-      if (document.visibilityState !== "visible" || !ids.current.length) return;
+      if (document.visibilityState !== "visible" || !keys.current.length) return;
       try {
-        const fresh = await refreshComments(ids.current);
-        setItems((list) => list.map((i) => (fresh[i.id] ? { ...i, comments: fresh[i.id] } : i)));
+        const fresh = await refreshComments(keys.current);
+        setItems((list) => list.map((i) => (fresh[i.key] ? { ...i, comments: fresh[i.key] } : i)));
       } catch { /* сеть пропала — попробуем в следующий раз */ }
     };
     const t = setInterval(tick, POLL_MS);
@@ -36,8 +37,10 @@ export function FeedList({ initial }: { initial: FeedPage }) {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", tick); };
   }, []);
 
-  const update = (id: number, patch: Partial<FeedItem> | null) =>
-    setItems((list) => (patch ? list.map((i) => (i.id === id ? { ...i, ...patch } : i)) : list.filter((i) => i.id !== id)));
+  const update = (key: string, patch: Partial<NoteItem> | Partial<FinishedItem> | null) =>
+    setItems((list) => (patch
+      ? list.map((i) => (i.key === key ? ({ ...i, ...patch } as FeedItem) : i))
+      : list.filter((i) => i.key !== key)));
 
   if (!items.length) {
     return (
@@ -54,13 +57,19 @@ export function FeedList({ initial }: { initial: FeedPage }) {
   return (
     <div className="space-y-4">
       <ul className="space-y-4">
-        {items.map((it) => <li key={it.id}><FeedCard item={it} onChange={(p) => update(it.id, p)} /></li>)}
+        {items.map((it) => (
+          <li key={it.key}>
+            {it.kind === "note"
+              ? <NoteCard item={it} onChange={(p) => update(it.key, p)} />
+              : <FinishedCard item={it} onChange={(p) => update(it.key, p)} />}
+          </li>
+        ))}
       </ul>
       {next && (
         <button type="button" disabled={loading} className="btn-ghost w-full"
           onClick={() => startLoading(async () => {
             const page = await loadFeed(next);
-            setItems((list) => [...list, ...page.items.filter((p) => !list.some((i) => i.id === p.id))]);
+            setItems((list) => [...list, ...page.items.filter((p) => !list.some((i) => i.key === p.key))]);
             setNext(page.next);
           })}>
           {loading ? "Загружаю…" : "Показать ещё"}
@@ -70,7 +79,20 @@ export function FeedList({ initial }: { initial: FeedPage }) {
   );
 }
 
-function FeedCard({ item, onChange }: { item: FeedItem; onChange: (patch: Partial<FeedItem> | null) => void }) {
+function CardHeader({ item, sub, right }: { item: FeedItem; sub: string; right?: React.ReactNode }) {
+  return (
+    <header className="flex items-center gap-3">
+      <Avatar name={item.name} url={item.avatarUrl} size={36} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium">{item.mine ? "Вы" : item.name}</div>
+        <div className="truncate text-[12px] text-muted">{sub}{item.edited ? " · изменено" : ""}</div>
+      </div>
+      {right}
+    </header>
+  );
+}
+
+function NoteCard({ item, onChange }: { item: NoteItem; onChange: (patch: Partial<NoteItem> | null) => void }) {
   const [revealed, setRevealed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, startBusy] = useTransition();
@@ -79,14 +101,8 @@ function FeedCard({ item, onChange }: { item: FeedItem; onChange: (patch: Partia
 
   return (
     <article className="card min-w-0 p-4 sm:p-5 lg:p-6">
-      <header className="flex items-center gap-3">
-        <Avatar name={item.name} url={item.avatarUrl} size={36} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-medium">{item.mine ? "Вы" : item.name}</div>
-          <div className="truncate text-[12px] text-muted">вечер {item.day} · {item.at}</div>
-        </div>
-        {item.pages > 0 && <span className="num shrink-0 text-[14px] text-teal">+{item.pages} стр.</span>}
-      </header>
+      <CardHeader item={item} sub={`вечер ${item.day} · ${item.at}`}
+        right={item.pages > 0 && <span className="num shrink-0 text-[14px] text-teal">+{item.pages} стр.</span>} />
 
       {item.book && (
         <div className="mt-3 flex min-w-0 items-center gap-2.5">
@@ -99,7 +115,10 @@ function FeedCard({ item, onChange }: { item: FeedItem; onChange: (patch: Partia
         {editing ? (
           <NoteEditor entryId={item.id} note={item.note} isSpoiler={item.isSpoiler} autoFocus
             onCancel={() => setEditing(false)}
-            onSaved={(note, isSpoiler) => { setEditing(false); onChange(note ? { note, isSpoiler } : null); }} />
+            onSaved={(note, isSpoiler) => {
+              setEditing(false);
+              onChange(note ? { note, isSpoiler, edited: item.edited || note !== item.note || isSpoiler !== item.isSpoiler } : null);
+            }} />
         ) : hidden ? (
           <button type="button" onClick={() => setRevealed(true)}
             className="w-full rounded-xl border border-dashed border-lamp/40 bg-lamp/5 px-4 py-3 text-left text-[14px] text-lamp hover:bg-lamp/10">
@@ -126,12 +145,37 @@ function FeedCard({ item, onChange }: { item: FeedItem; onChange: (patch: Partia
       )}
       {err && <p role="alert" className="mt-2 text-[13px] text-lamp">{err}</p>}
 
-      <Comments entryId={item.id} comments={item.comments} onChange={(comments) => onChange({ comments })} />
+      <Comments target={item.key} comments={item.comments} onChange={(comments) => onChange({ comments })} />
     </article>
   );
 }
 
-function Comments({ entryId, comments, onChange }: { entryId: number; comments: FeedComment[]; onChange: (c: FeedComment[]) => void }) {
+/** «{имя} дочитал(а) «{книга}» — ★★★★☆» с отзывом; комментируется как мысль. */
+function FinishedCard({ item, onChange }: { item: FinishedItem; onChange: (patch: Partial<FinishedItem> | null) => void }) {
+  return (
+    <article className="card min-w-0 p-4 sm:p-5 lg:p-6">
+      <CardHeader item={item} sub={`дочитал${item.mine ? "и" : "(а)"} книгу · ${item.at}`} />
+      <div className="mt-3 flex min-w-0 gap-4">
+        {item.book && <Cover title={item.book.title} url={item.book.coverUrl} className="h-24 w-16" />}
+        <div className="min-w-0 flex-1">
+          <p className="font-medium leading-snug [overflow-wrap:anywhere]">
+            {item.mine ? "Вы дочитали" : `${item.name} дочитал(а)`} «{item.book?.title}»
+            {item.rating ? <> — <Stars value={item.rating} /></> : null}
+          </p>
+          {item.review && <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed text-ink/90 [overflow-wrap:anywhere]">{item.review}</p>}
+          {item.mine && (
+            <Link href={`/books/${item.id}`} className="mt-2 inline-block text-[13px] text-muted hover:text-ink">
+              {item.rating ? "Изменить оценку" : "Поставить оценку"}
+            </Link>
+          )}
+        </div>
+      </div>
+      <Comments target={item.key} comments={item.comments} onChange={(comments) => onChange({ comments })} />
+    </article>
+  );
+}
+
+function Comments({ target, comments, onChange }: { target: string; comments: FeedComment[]; onChange: (c: FeedComment[]) => void }) {
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, start] = useTransition();
@@ -152,7 +196,7 @@ function Comments({ entryId, comments, onChange }: { entryId: number; comments: 
       )}
       <form className="flex items-end gap-2" onSubmit={(e) => {
         e.preventDefault();
-        if (text.trim()) run(addComment(entryId, text), () => setText(""));
+        if (text.trim()) run(addComment(target, text), () => setText(""));
       }}>
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={1} maxLength={NOTE_MAX}
           placeholder="Ответить…" aria-label="Ответить на мысль"

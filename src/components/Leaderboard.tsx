@@ -26,10 +26,12 @@ export function Leaderboard({ stats, meId }: { stats: MemberStats[]; meId: numbe
                 <span className={`truncate ${m.user.id === meId ? "font-semibold" : ""}`}>
                   {m.user.name}{m.user.id === meId ? " (вы)" : ""}
                 </span>
-                <span className="num shrink-0 text-[15px]">{m.consistency30}%</span>
+                <span className="num shrink-0 text-[15px]" title={m.consistency30 === null ? "Первый вечер ещё впереди" : undefined}>
+                  {m.consistency30 === null ? "—" : `${m.consistency30}%`}
+                </span>
               </div>
               <div className="mt-1.5 h-2 rounded-full bg-raised">
-                <div className="h-2 rounded-full bg-teal shadow-[0_0_12px_rgba(44,224,199,.5)]" style={{ width: `${Math.max(m.consistency30, 2)}%` }} />
+                <div className="h-2 rounded-full bg-teal shadow-[0_0_12px_rgba(44,224,199,.5)]" style={{ width: `${Math.max(m.consistency30 ?? 0, 2)}%` }} />
               </div>
             </div>
             <span className="flex w-12 shrink-0 items-center justify-end gap-0.5 num text-[14px]" title="Текущая серия">
