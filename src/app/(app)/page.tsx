@@ -21,16 +21,16 @@ export default async function Dashboard() {
   const doneToday = mine?.states.get(d.today) === "norm" || mine?.states.get(d.today) === "minimum";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-12 lg:gap-5">
-      <header className="flex items-center justify-between lg:col-span-12 lg:mb-2">
-        <div>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5 [&>*]:min-w-0">
+      <header className="flex items-center justify-between gap-3 lg:col-span-12 lg:mb-2">
+        <div className="min-w-0">
           <div className="label">{shortDate(d.today)}</div>
-          <h1 className="font-display text-xl font-bold lg:text-3xl">
+          <h1 className="truncate font-display text-xl font-bold lg:text-3xl">
             {doneToday ? "Вечер засчитан" : "Книжная ночь"}
           </h1>
         </div>
-        <div className="flex items-center gap-3 lg:hidden">
-          {!doneToday && <Link href="/today" className="btn-primary px-4 py-2.5 text-[14px]">Отметить вечер</Link>}
+        <div className="flex shrink-0 items-center gap-3 lg:hidden">
+          {!doneToday && <Link href="/today" className="btn-primary whitespace-nowrap px-4 py-2.5 text-[14px] max-[399px]:px-3 max-[399px]:text-[13px]">Отметить вечер</Link>}
           <Link href="/profile" aria-label="Профиль"><Avatar name={me.name} url={me.avatarUrl} size={40} /></Link>
         </div>
       </header>
@@ -39,7 +39,7 @@ export default async function Dashboard() {
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
           <div>
             <div className="label">Регулярность группы за 30 дней</div>
-            <div className="num mt-1 text-[72px] font-extrabold leading-none text-ink [text-shadow:0_0_40px_rgba(44,224,199,.35)] lg:text-[104px]">
+            <div className="num mt-1 text-[clamp(56px,14vw,104px)] font-extrabold leading-none text-ink [text-shadow:0_0_40px_rgba(44,224,199,.35)]">
               {d.overall}<span className="text-teal">%</span>
             </div>
           </div>
@@ -51,21 +51,21 @@ export default async function Dashboard() {
         <div className="mt-4"><Wave data={d.series} /></div>
       </section>
 
-      <div className="grid grid-cols-3 gap-3 lg:col-span-4 lg:grid-cols-1 lg:gap-5">
-        <div className="card p-4 lg:flex lg:flex-col lg:justify-center lg:p-6">
-          <div className="label">Эта неделя</div>
-          <div className="num mt-1 text-2xl font-bold lg:text-4xl">{d.thisWeek}%</div>
+      <div className="grid grid-cols-3 gap-3 max-[399px]:gap-2 lg:col-span-4 lg:grid-cols-1 lg:gap-5 [&>*]:min-w-0">
+        <div className="card px-3 py-4 max-[399px]:px-2.5 max-[399px]:py-3 lg:flex lg:flex-col lg:justify-center lg:p-6">
+          <div className="label truncate max-[399px]:text-[12px]">Эта неделя</div>
+          <div className="num mt-1 whitespace-nowrap text-[clamp(18px,5vw,24px)] font-bold lg:text-4xl">{d.thisWeek}%</div>
         </div>
-        <div className="card p-4 lg:flex lg:flex-col lg:justify-center lg:p-6">
-          <div className="label">К прошлой<span className="hidden lg:inline"> неделе</span></div>
-          <div className={`num mt-1 text-2xl font-bold lg:text-4xl ${d.deltaWeek >= 0 ? "text-teal" : "text-lamp"}`}>
+        <div className="card px-3 py-4 max-[399px]:px-2.5 max-[399px]:py-3 lg:flex lg:flex-col lg:justify-center lg:p-6">
+          <div className="label truncate max-[399px]:text-[12px]">К прошлой<span className="hidden lg:inline"> неделе</span></div>
+          <div className={`num mt-1 whitespace-nowrap text-[clamp(18px,5vw,24px)] font-bold lg:text-4xl ${d.deltaWeek >= 0 ? "text-teal" : "text-lamp"}`}>
             {d.deltaWeek > 0 ? "+" : ""}{d.deltaWeek}%
           </div>
         </div>
-        <div className="card p-4 lg:flex lg:flex-col lg:justify-center lg:p-6">
-          <div className="label">Серия<span className="hidden lg:inline"> лучшего</span></div>
-          <div className="num mt-1 flex items-center gap-1 text-2xl font-bold lg:text-4xl">
-            <Flame className="h-6 w-6 lg:h-9 lg:w-9" />{d.bestStreak}
+        <div className="card px-3 py-4 max-[399px]:px-2.5 max-[399px]:py-3 lg:flex lg:flex-col lg:justify-center lg:p-6">
+          <div className="label truncate max-[399px]:text-[12px]">Серия<span className="hidden lg:inline"> лучшего</span></div>
+          <div className="num mt-1 flex items-center gap-1 whitespace-nowrap text-[clamp(18px,5vw,24px)] font-bold lg:text-4xl">
+            <Flame className="h-6 w-6 shrink-0 max-[399px]:h-5 max-[399px]:w-5 lg:h-9 lg:w-9" />{d.bestStreak}
           </div>
         </div>
       </div>
@@ -73,11 +73,11 @@ export default async function Dashboard() {
       <div className="lg:col-span-5"><Leaderboard stats={d.stats} meId={me.id} /></div>
 
       <section className="card p-5 lg:col-span-7">
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
           <h2 className="font-semibold">На тумбочке</h2>
           <Link href="/shelf" className="text-[13px] text-teal">Вся полка</Link>
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-2 lg:gap-5">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5 [&>*]:min-w-0">
           {d.stats.filter((s) => s.activeBook).map((s) => (
             <BookProgress key={s.user.id} book={s.activeBook!} who={s.user.id === me.id ? "Вы" : s.user.name} whoAvatar={<Avatar name={s.user.name} url={s.user.avatarUrl} size={20} />} />
           ))}

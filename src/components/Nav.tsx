@@ -29,12 +29,13 @@ export function Nav({ isAdmin }: { isAdmin: boolean }) {
   const on = useActive();
   const list = isAdmin ? [...items, admin] : items;
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-night/90 backdrop-blur pb-[env(safe-area-inset-bottom)] lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-night/90 backdrop-blur pb-[env(safe-area-inset-bottom)]
+      pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] lg:hidden">
       <ul className="mx-auto flex max-w-lg">
         {list.map((it) => {
           const main = it.href === "/today";
           return (
-            <li key={it.href} className="flex-1">
+            <li key={it.href} className="min-w-0 flex-1">
               <Link href={it.href} className={`flex flex-col items-center gap-1 py-3 text-[12px] ${on(it.href) ? "text-teal" : "text-muted"}`}>
                 <span className={main ? "grid h-9 w-9 place-items-center rounded-full bg-teal text-night -mt-1" : ""}>
                   <Icon d={it.d} stroke={main} />
@@ -54,7 +55,8 @@ export function Sidebar({ isAdmin, name, avatarUrl }: { isAdmin: boolean; name: 
   const on = useActive();
   const list = isAdmin ? [...items.filter((i) => i.href !== "/today"), admin] : items.filter((i) => i.href !== "/today");
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-line bg-night/80 px-5 py-8 backdrop-blur lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-line bg-night/80 pr-5 pl-[max(1.25rem,env(safe-area-inset-left))]
+      pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] backdrop-blur lg:flex">
       <Link href="/" className="flex items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon.svg" alt="" className="h-10 w-10" />

@@ -12,15 +12,15 @@ export default async function Admin() {
 
   return (
     <div className="space-y-4 lg:space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
+      <header className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <div className="label">Регистрации нет — аккаунты выдаёте вы. Книги любого участника можно править на полке</div>
           <h1 className="font-display text-xl font-bold lg:text-3xl">Участники</h1>
         </div>
-        <form action={logout}><button className="text-[13px] text-muted">Выйти</button></form>
+        <form action={logout} className="shrink-0"><button className="text-[13px] text-muted">Выйти</button></form>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[380px_1fr] lg:items-start lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_minmax(0,1fr)] lg:items-start lg:gap-6 [&>*]:min-w-0">
       <div className="lg:sticky lg:top-10"><CreateUserForm /></div>
 
       <ul className="space-y-3">
@@ -29,10 +29,10 @@ export default async function Admin() {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="truncate font-medium">{u.name}{u.role === "admin" && <span className="ml-2 text-[12px] text-teal">админ</span>}</div>
-                <div className="text-[13px] text-muted">{u.login}{u.isActive ? "" : " · отключён"}</div>
+                <div className="truncate text-[13px] text-muted">{u.login}{u.isActive ? "" : " · отключён"}</div>
               </div>
               {u.id !== me.id && (
-                <form action={toggleActive}>
+                <form action={toggleActive} className="shrink-0">
                   <input type="hidden" name="userId" value={u.id} />
                   <button className="btn-ghost px-3 py-2 text-[13px]">{u.isActive ? "Отключить" : "Включить"}</button>
                 </form>

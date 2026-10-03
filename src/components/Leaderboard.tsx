@@ -7,7 +7,7 @@ const medal = ["#FFD36E", "#C9D3E0", "#E0A26E"];
 export function Leaderboard({ stats, meId }: { stats: MemberStats[]; meId: number }) {
   return (
     <section className="card h-full p-5">
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <h2 className="font-semibold">Кто держит ритм</h2>
         <span className="label">регулярность, 30 дней</span>
       </div>
@@ -26,7 +26,7 @@ export function Leaderboard({ stats, meId }: { stats: MemberStats[]; meId: numbe
                 <span className={`truncate ${m.user.id === meId ? "font-semibold" : ""}`}>
                   {m.user.name}{m.user.id === meId ? " (вы)" : ""}
                 </span>
-                <span className="num text-[15px]">{m.consistency30}%</span>
+                <span className="num shrink-0 text-[15px]">{m.consistency30}%</span>
               </div>
               <div className="mt-1.5 h-2 rounded-full bg-raised">
                 <div className="h-2 rounded-full bg-teal shadow-[0_0_12px_rgba(44,224,199,.5)]" style={{ width: `${Math.max(m.consistency30, 2)}%` }} />

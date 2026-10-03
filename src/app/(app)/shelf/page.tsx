@@ -28,7 +28,7 @@ export default async function Shelf() {
       {b.status === "active" && (
         <span className="absolute left-1.5 top-1.5 rounded-md bg-night/85 px-1.5 py-0.5 text-[10px] font-semibold text-teal">читает</span>
       )}
-      <div className="mt-1.5 truncate text-[13px] font-medium">{b.title}</div>
+      <div className="mt-1.5 truncate text-[13px] font-medium" title={b.title}>{b.title}</div>
       {b.author && <div className="truncate text-[12px] text-muted">{b.author}</div>}
       <div className="text-[12px] text-muted">{evenings(b.id)} веч. · {pages(b.id)} стр.</div>
       {b.status === "finished" && b.finishedOn && (
@@ -65,7 +65,7 @@ export default async function Shelf() {
         const done = mine.filter((b) => b.status === "finished").length;
         return (
           <section key={u.id} id={`u-${u.id}`} className="card p-5 lg:p-7">
-            <h2 className="flex items-center gap-3 font-semibold"><Avatar name={u.name} url={u.avatarUrl} size={36} />{u.id === me.id ? "Вы" : u.name} <span className="num text-muted">· {done}</span></h2>
+            <h2 className="flex min-w-0 items-center gap-3 font-semibold"><Avatar name={u.name} url={u.avatarUrl} size={36} /><span className="truncate">{u.id === me.id ? "Вы" : u.name}</span> <span className="num shrink-0 text-muted">· {done}</span></h2>
             <ul className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 lg:gap-6">
               {mine.map((b) => <BookCard key={b.id} b={b} />)}
             </ul>

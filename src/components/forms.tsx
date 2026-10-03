@@ -134,7 +134,7 @@ export function ResetPasswordForm({ userId }: { userId: number }) {
   return (
     <form action={act} className="mt-2 flex flex-wrap items-center gap-2">
       <input type="hidden" name="userId" value={userId} />
-      <input name="password" placeholder="Новый пароль" minLength={6} className="input flex-1 py-2 text-[14px]" required />
+      <input name="password" placeholder="Новый пароль" minLength={6} className="input flex-1 basis-40 py-2 lg:text-[14px]" required />
       <Submit className="btn-ghost py-2 text-[14px]">Сбросить</Submit>
       <div className="w-full"><Msg s={s} /></div>
     </form>
@@ -175,7 +175,7 @@ export function CoverInput({ initial = "" }: { initial?: string }) {
       <div className="min-w-0 flex-1 space-y-2">
         <input type="hidden" name="coverUrl" value={value} />
         <input
-          type="url" placeholder="Ссылка на обложку" className="input py-2.5 text-[14px]"
+          type="url" placeholder="Ссылка на обложку" className="input py-2.5 lg:text-[14px]"
           value={isData ? "" : value} onChange={(e) => { setErr(""); setValue(e.target.value.trim()); }}
           aria-label="Ссылка на обложку"
         />
@@ -298,7 +298,7 @@ export function AvatarForm({ userId, name, url, compact = false }: { userId: num
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="avatarUrl" value={value} />
       <Avatar name={name} url={value || null} size={size} />
-      <div className="min-w-0 space-y-2">
+      <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <label className="btn-ghost cursor-pointer px-3 py-2 text-[13px]">
             {busy ? "Сжимаю…" : value ? "Другое фото" : "Загрузить фото"}

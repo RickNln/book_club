@@ -14,7 +14,7 @@ export default async function EditBook({ params }: { params: { id: string } }) {
       <header>
         <Link href="/shelf" className="text-[13px] text-teal">← Полка</Link>
         <h1 className="mt-1 font-display text-xl font-bold lg:text-3xl">Редактировать книгу</h1>
-        {foreign && <p className="label mt-1">Книга участника {book.ownerName} — вы правите её как админ</p>}
+        {foreign && <p className="label mt-1 [overflow-wrap:anywhere]">Книга участника {book.ownerName} — вы правите её как админ</p>}
       </header>
       <EditBookForm book={book} />
     </div>

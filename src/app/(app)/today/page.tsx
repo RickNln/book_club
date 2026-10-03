@@ -32,11 +32,11 @@ export default async function Today() {
           <ul className="space-y-2">
             {todays.map((e) => (
               <li key={e.id} className="flex items-center justify-between gap-2">
-                <span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">
                   <span className="num text-teal">+{String(e.values?.pages ?? 0)}</span> стр. · {books.find((b) => b.id === e.itemId)?.title ?? "книга"}
                   {e.level === "minimum" && <span className="text-muted"> · минимум</span>}
                 </span>
-                <form action={undoEntry}>
+                <form action={undoEntry} className="shrink-0">
                   <input type="hidden" name="entryId" value={e.id} />
                   <button className="text-[13px] text-muted underline-offset-2 hover:underline">Отменить</button>
                 </form>
@@ -53,7 +53,7 @@ export default async function Today() {
           <AddBookForm open />
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2 lg:items-start lg:gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-6 [&>*]:min-w-0">
           <LogForm books={books.map((b) => ({ id: b.id, title: b.title }))} canYesterday={canBackfillYesterday()} />
           <div className="space-y-4">
           <section className="card space-y-4 p-5">

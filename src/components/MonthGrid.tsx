@@ -18,24 +18,28 @@ export function MonthGrid({ stats, monthStart, today }: { stats: MemberStats[]; 
   const days: string[] = [];
   for (let d = monthStart; d.slice(0, 7) === monthStart.slice(0, 7); d = addDays(d, 1)) days.push(d);
   return (
-    <section className="card h-full p-5">
-      <div className="flex items-baseline justify-between">
+    <section className="card h-full min-w-0 overflow-hidden p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <h2 className="font-semibold">{monthName(today)}</h2>
         <span className="label">каждый кружок — вечер</span>
       </div>
-      <div className="mt-4 overflow-x-auto -mx-5 px-5">
-        <table className="border-separate border-spacing-[5px]">
+      {/* Прокручивается только таблица внутри карточки; колонка с именами закреплена слева */}
+      <div className="-mx-5 mt-4 overflow-x-auto overscroll-x-contain">
+        <table className="border-collapse">
           <tbody>
             {stats.map((m) => (
               <tr key={m.user.id}>
-                <th className="sticky left-0 z-10 bg-surface pr-2 text-left text-[13px] font-medium whitespace-nowrap">
-                  <span className="flex items-center gap-2"><Avatar name={m.user.name} url={m.user.avatarUrl} size={24} />{m.user.name}</span>
+                <th className="sticky left-0 z-10 bg-surface py-[3px] pl-5 pr-3 text-left text-[13px] font-medium shadow-[8px_0_8px_-6px_rgba(0,0,0,.6)]">
+                  <span className="flex max-w-[7.5rem] items-center gap-2 lg:max-w-[12rem]" title={m.user.name}>
+                    <Avatar name={m.user.name} url={m.user.avatarUrl} size={24} />
+                    <span className="truncate">{m.user.name}</span>
+                  </span>
                 </th>
-                {days.map((d) => {
+                {days.map((d, i) => {
                   const after = diffDays(d, today) > 0;
                   const s = after ? "before" : m.states.get(d) ?? "before";
                   return (
-                    <td key={d}>
+                    <td key={d} className={`p-[3px] ${i === days.length - 1 ? "pr-5" : ""}`}>
                       <span title={`${Number(d.slice(8))}: ${title[s]}`}
                         className={`grid h-6 w-6 lg:h-7 lg:w-7 place-items-center rounded-full text-[10px] font-bold ${style[s]}`}>
                         {s === "norm" ? "✓" : s === "frozen" ? "❄" : ""}

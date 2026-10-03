@@ -8,7 +8,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <Sidebar isAdmin={me.role === "admin"} name={me.name} avatarUrl={me.avatarUrl} />
-      <main className="mx-auto max-w-lg px-4 pt-[calc(env(safe-area-inset-top)+20px)] pb-28
+      <main className="mx-auto max-w-lg pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]
+        pt-[calc(env(safe-area-inset-top)+20px)] pb-[calc(env(safe-area-inset-bottom)+7rem)]
         lg:ml-64 lg:mr-0 lg:max-w-none lg:px-10 lg:pt-10 lg:pb-12">
         <div className="lg:mx-auto lg:max-w-6xl">{children}</div>
       </main>

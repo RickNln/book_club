@@ -7,8 +7,8 @@ export default async function Profile() {
   return (
     <div className="mx-auto max-w-xl space-y-4 lg:space-y-5">
       <header>
-        <div className="label">{me.login}{me.role === "admin" ? " · админ" : ""}</div>
-        <h1 className="font-display text-xl font-bold lg:text-3xl">{me.name}</h1>
+        <div className="label truncate">{me.login}{me.role === "admin" ? " · админ" : ""}</div>
+        <h1 className="font-display text-xl font-bold [overflow-wrap:anywhere] lg:text-3xl">{me.name}</h1>
       </header>
       <section className="card p-5 lg:p-7">
         <h2 className="mb-4 font-semibold">Аватарка</h2>
